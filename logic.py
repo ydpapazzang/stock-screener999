@@ -41,6 +41,7 @@ def get_processed_data(symbol, period='M'):
         df_res['ma5'] = df_res['Close'].rolling(5).mean()
         df_res['ma12'] = df_res['Close'].rolling(12).mean()
         df_res['ma20'] = df_res['Close'].rolling(20).mean()
+        df_res['ma30'] = df_res['Close'].rolling(30).mean()
         df_res['ma60'] = df_res['Close'].rolling(60).mean()
         df_res['vol_ma5'] = df_res['Volume'].rolling(5).mean()
         
@@ -55,12 +56,10 @@ def get_processed_data(symbol, period='M'):
         return df_res
     except: return None
 
-# --- [2] 다중 전략 엔진 (Intersection Logic) ---
+# --- [2] 다중 전략 엔진 ---
 def check_multi_signals(df, strategy_list):
-    """여러 전략 리스트를 받아 교집합(AND) 신호를 반환"""
     if df is None or len(df) < 65: return pd.Series(False, index=df.index if df is not None else [])
-    
-    final_cond = pd.Series(True, index=df.index) # 기본값 True (교집합 시작)
+    final_cond = pd.Series(True, index=df.index)
     
     for strategy in strategy_list:
         if strategy == "정석 정배열 (추세추종)":
@@ -81,13 +80,13 @@ def check_multi_signals(df, strategy_list):
         elif strategy == "주봉 볼린저 하단 터치":
             cond = (df['Low'] <= df['bb_lower'])
         elif strategy == "주봉 20선 돌파 및 안착":
-            # 조건: 지난주 종가 < 20선 AND 이번주 종가 > 20선 AND 거래량 > 5주 평균거래량
             cond = (df['Close'].shift(1) < df['ma20'].shift(1)) & (df['Close'] > df['ma20']) & (df['Volume'] > df['vol_ma5'])
+        elif strategy == "와인스타인 2단계 돌파":
+            # 30주선 우상향 + 가격 돌파 + 거래량 실림
+            cond = (df['ma30'] >= df['ma30'].shift(1)) & (df['Close'].shift(1) < df['ma30'].shift(1)) & (df['Close'] > df['ma30']) & (df['Volume'] > df['vol_ma5'])
         else:
             cond = pd.Series(False, index=df.index)
-        
-        final_cond &= cond # AND 조건 결합
-        
+        final_cond &= cond
     return final_cond
 
 def fast_backtest_multi(df, strategy_list, period='M'):
@@ -102,8 +101,7 @@ def fast_backtest_multi(df, strategy_list, period='M'):
 
 # --- [3] 타점 표시 차트 로직 ---
 def create_advanced_chart(df, name, strategy_list):
-    """Plotly 차트에 신호 타점 표시 추가"""
-    df_plot = df.tail(36) # 최근 3년(주/월) 표시
+    df_plot = df.tail(48) # 와인스타인 전략을 위해 조금 더 길게(약 1년) 표시
     signals = check_multi_signals(df, strategy_list)
     signals_plot = signals.reindex(df_plot.index, fill_value=False)
     
@@ -112,7 +110,6 @@ def create_advanced_chart(df, name, strategy_list):
         name="Price"
     )])
     
-    # 신호 타점 (Buy Arrows) 추가
     buy_signals = df_plot[signals_plot]
     if not buy_signals.empty:
         fig.add_trace(go.Scatter(
@@ -121,12 +118,13 @@ def create_advanced_chart(df, name, strategy_list):
             marker=dict(symbol='triangle-up', size=15, color='lime', line=dict(width=2, color='white'))
         ))
 
-    # 이평선
+    # 이평선 (와인스타인용 30선 포함)
     fig.add_trace(go.Scatter(x=df_plot.index, y=df_plot['ma5'], name="MA5", line=dict(color='orange', width=1)))
     fig.add_trace(go.Scatter(x=df_plot.index, y=df_plot['ma20'], name="MA20", line=dict(color='red', width=1.5)))
+    fig.add_trace(go.Scatter(x=df_plot.index, y=df_plot['ma30'], name="MA30", line=dict(color='cyan', width=2, dash='dash')))
     fig.add_trace(go.Scatter(x=df_plot.index, y=df_plot['ma60'], name="MA60", line=dict(color='purple', width=1)))
 
-    fig.update_layout(title=f"{name} (포착 타점 표시)", template="plotly_dark", xaxis_rangeslider_visible=False, height=600)
+    fig.update_layout(title=f"{name} (타점 및 30주선 표시)", template="plotly_dark", xaxis_rangeslider_visible=False, height=600)
     return fig
 
 # --- [4] 기타 및 병렬 처리 ---
@@ -151,7 +149,9 @@ def process_stock_multi_worker(symbol, name, strategy_list, period_key):
         if signals.iloc[-1]:
             is_new = "Y" if not signals.iloc[-2] else "N"
             curr = df_data.iloc[-1]
-            disp = (curr['Close'] / curr['ma20'] - 1) * 100
+            # 전략에 따라 이격도 기준선 변경
+            ref_ma = curr['ma30'] if "와인스타인" in "".join(strategy_list) else curr['ma20']
+            disp = (curr['Close'] / ref_ma - 1) * 100
             win, ret, cnt = fast_backtest_multi(df_data, strategy_list, period_key)
             return {"코드": symbol, "종목명": name, "현재가": f"{int(curr['Close']):,}", "승률": win, "평균수익": f"{ret}%", "신호수": cnt, "신규감지": is_new, "이격도": f"{disp:+.1f}%"}
     return None
@@ -166,12 +166,11 @@ def send_telegram_message(token, chat_id, message):
 
 def format_tg_message(results, strategy_names, target_type):
     now_str = datetime.now().strftime('%Y-%m-%d %H:%M')
-    strategies_str = ", ".join(strategy_names)
-    msg = f"🚀 *[복합 전략]* 스캔 결과\n"
-    msg += f"🎯 전략: {strategies_str}\n"
+    msg = f"🚀 *[전략 포착]* 스캔 결과\n"
+    msg += f"🎯 전략: {', '.join(strategy_names)}\n"
     msg += f"📊 포착: {len(results)}개 | {target_type}\n\n"
     sorted_res = sorted(results, key=lambda x: x.get('승률', 0), reverse=True)
     for i, item in enumerate(sorted_res[:10]):
         msg += f"{i+1}. *{item['종목명']}* (승률: {item['승률']}%)\n"
-        msg += f"   - 가격: {item['현재가']}원 | 신규: {item['신규감지']}\n"
+        msg += f"   - 수익: {item['평균수익']} | 신규: {item['신규감지']}\n"
     return msg
