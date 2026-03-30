@@ -1,0 +1,9 @@
+streamlit
+pandas
+numpy
+FinanceDataReader
+requests
+apscheduler
+beautifulsoup4
+lxml
+yfinance

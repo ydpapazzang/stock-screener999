@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Config (Critical Security)
+config.json
+
+# Environments
+.venv/
+env/
+venv/
+ENV/
+
+# Streamlit
+.streamlit/
