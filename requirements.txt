@@ -1,9 +1,10 @@
 streamlit
 pandas
 numpy
-FinanceDataReader
+finance-datareader
 requests
 apscheduler
 beautifulsoup4
 lxml
+lxml_html_clean
 yfinance
