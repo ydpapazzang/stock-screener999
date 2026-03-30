@@ -9,8 +9,30 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 st.set_page_config(page_title="High-Speed Strategic Screener", layout="wide", page_icon="⚡")
 config = logic.load_config()
 
-# --- [2] 상단 탭 구성 ---
-tab1, tab2 = st.tabs(["🚀 초고속 스캔 & 백테스트", "📅 자동 알림 설정"])
+# 초기 비밀번호 설정 (없을 경우)
+if "password" not in config or not config["password"]:
+    config["password"] = "1234" # 초기 비번
+    logic.save_config(config)
+
+# --- [로그인 시스템] ---
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+
+def check_password():
+    if st.session_state["password_input"] == config["password"]:
+        st.session_state["authenticated"] = True
+        del st.session_state["password_input"] # 보안을 위해 입력값 삭제
+    else:
+        st.error("❌ 비밀번호가 틀렸습니다.")
+
+if not st.session_state["authenticated"]:
+    st.title("🔒 보안 접속")
+    st.markdown("본 서비스는 인증된 사용자만 이용 가능합니다.")
+    st.text_input("접속 비밀번호를 입력하세요", type="password", key="password_input", on_change=check_password)
+    st.stop() # 인증 전까지 아래 코드 실행 중단
+
+# --- [2] 메인 UI (인증 성공 시) ---
+tab1, tab2, tab3 = st.tabs(["🚀 초고속 스캔 & 백테스트", "📅 자동 알림 설정", "⚙️ 시스템 설정"])
 
 # --- [탭 1: 스캔 및 백테스트] ---
 with tab1:
@@ -38,7 +60,7 @@ with tab1:
         has_tg = config.get("tg_token") and config.get("tg_chat_id")
         if has_tg:
             st.success("✅ 텔레그램 활성화")
-            if st.button("🗑️ 설정 초기화"):
+            if st.button("🗑️ 텔레그램 설정 초기화"):
                 config.update({"tg_token": "", "tg_chat_id": ""})
                 logic.save_config(config); st.rerun()
         else:
@@ -73,15 +95,12 @@ with tab1:
             st.session_state['period_key'] = period_key
             st.success(f"✅ 완료! {len(results)}개 포착 ({time.time()-start_time:.1f}초)")
 
-    # 결과 표시 및 차트 섹션
     if st.session_state.get('scan_results'):
         df_res = pd.DataFrame(st.session_state['scan_results']).sort_values(by="승률", ascending=False)
         st.dataframe(df_res, use_container_width=True)
-        
         st.divider()
         st.subheader("📊 종목 상세 차트 분석")
         selected_name = st.selectbox("차트를 볼 종목을 선택하세요", df_res['종목명'].tolist())
-        
         if selected_name:
             selected_code = df_res[df_res['종목명'] == selected_name]['코드'].values[0]
             with st.spinner("차트 생성 중..."):
@@ -113,3 +132,28 @@ with tab2:
             col1.markdown(f"### 📡 {sched['freq']} {sched['time']} | {sched['strategy']}")
             if col2.button("🗑️ 삭제", key=f"del_{sched['id']}"):
                 config['schedules'].pop(idx); logic.save_config(config); st.rerun()
+
+# --- [탭 3: 시스템 설정] ---
+with tab3:
+    st.title("⚙️ 시스템 설정")
+    st.subheader("🔑 비밀번호 변경")
+    current_pw = st.text_input("현재 비밀번호", type="password")
+    new_pw = st.text_input("새 비밀번호", type="password")
+    confirm_pw = st.text_input("새 비밀번호 확인", type="password")
+    
+    if st.button("비밀번호 변경"):
+        if current_pw != config["password"]:
+            st.error("현재 비밀번호가 일치하지 않습니다.")
+        elif new_pw != confirm_pw:
+            st.error("새 비밀번호가 서로 일치하지 않습니다.")
+        elif not new_pw:
+            st.error("새 비밀번호를 입력해 주세요.")
+        else:
+            config["password"] = new_pw
+            logic.save_config(config)
+            st.success("✅ 비밀번호가 변경되었습니다. 다음 접속부터 적용됩니다.")
+
+    st.divider()
+    if st.button("🔓 로그아웃"):
+        st.session_state["authenticated"] = False
+        st.rerun()
