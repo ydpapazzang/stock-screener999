@@ -80,6 +80,9 @@ def check_multi_signals(df, strategy_list):
             cond = (df['rsi'].shift(1) < 30) & (df['rsi'] > 30)
         elif strategy == "주봉 볼린저 하단 터치":
             cond = (df['Low'] <= df['bb_lower'])
+        elif strategy == "주봉 20선 돌파 및 안착":
+            # 조건: 지난주 종가 < 20선 AND 이번주 종가 > 20선 AND 거래량 > 5주 평균거래량
+            cond = (df['Close'].shift(1) < df['ma20'].shift(1)) & (df['Close'] > df['ma20']) & (df['Volume'] > df['vol_ma5'])
         else:
             cond = pd.Series(False, index=df.index)
         

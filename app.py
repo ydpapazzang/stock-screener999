@@ -39,10 +39,14 @@ with tab1:
             all_strats = ["정석 정배열 (추세추종)", "20월선 눌림목 (조정매수)", "거래량 폭발 (세력개입)", "대시세 초입 (20선 돌파)", "월봉 MA12 돌파"]
             period_key = 'M'
         else:
-            all_strats = ["주봉 5/20 골든크로스", "주봉 RSI 과매도 탈출", "주봉 볼린저 하단 터치"]
+            all_strats = ["주봉 5/20 골든크로스", "주봉 RSI 과매도 탈출", "주봉 볼린저 하단 터치", "주봉 20선 돌파 및 안착"]
             period_key = 'W'
             
         selected_strategies = st.multiselect("사용할 전략들을 선택하세요 (모두 만족 시 포착)", all_strats, default=[all_strats[0]])
+        
+        # 전략 설명 추가
+        if "주봉 20선 돌파 및 안착" in selected_strategies:
+            st.info("**[주봉 20선 돌파]**\n- 20주 이평선(심리선)을 강한 거래량으로 돌파한 시점입니다. 대시세의 초입 가능성이 높습니다.")
         
         target_type = st.radio("분석 대상", ["주식 (KOSPI 200)", "ETF"])
         max_scan = 200 if "주식" in target_type else 1000
