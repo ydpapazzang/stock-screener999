@@ -92,7 +92,9 @@ with tab1:
 
     # 결과 및 차트 섹션
     if st.session_state.get('multi_scan_results'):
-        df_res = pd.DataFrame(st.session_state['multi_scan_results']).sort_values(by="승률", ascending=False)
+        df_res = pd.DataFrame(st.session_state['multi_scan_results'])
+        # 신규감지(Y/N) 내림차순 정렬 (Y가 N보다 먼저 옴) 후 승률 내림차순 정렬
+        df_res = df_res.sort_values(by=["신규감지", "승률"], ascending=[False, False])
         st.subheader("🎯 포착된 종목 리스트")
         st.dataframe(df_res, use_container_width=True)
         
