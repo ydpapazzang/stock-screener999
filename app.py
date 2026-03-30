@@ -149,7 +149,18 @@ with tab2:
     for idx, sched in enumerate(schedules):
         with st.container(border=True):
             col1, col2, col3 = st.columns([3, 1, 1])
-            with col1: st.markdown(f"### 📡 {sched['freq']} {sched['time']}\n**전략:** `{sched['strategy']}` | **대상:** `{sched['target']}`")
+            with col1: 
+                st.markdown(f"### 📡 {sched['freq']} {sched['time']}")
+                st.markdown(f"**전략:** `{sched['strategy']}` | **대상:** `{sched['target']}`")
+            
+            with col2:
+                if st.button("🔔 테스트", key=f"test_{sched['id']}"):
+                    test_msg = f"✅ *[알람 테스트]*\n설정: {sched['freq']} {sched['time']}\n전략: {sched['strategy']}\n대상: {sched['target']}\n\n연결이 정상입니다!"
+                    if logic.send_telegram_message(config.get("tg_token"), config.get("tg_chat_id"), test_msg):
+                        st.toast("테스트 메시지 발송 완료!")
+                    else:
+                        st.error("발송 실패! 토큰/ID를 확인하세요.")
+
             with col3:
                 if st.button("🗑️ 삭제", key=f"del_{sched['id']}", type="primary"):
                     config['schedules'].pop(idx); logic.save_config(config); st.rerun()
