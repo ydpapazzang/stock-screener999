@@ -51,13 +51,32 @@ with tab1:
         num_workers = st.slider("병렬 작업자 수 (Workers)", 1, 20, 10, help="수가 높을수록 빠르지만 서버 차단 위험이 있습니다. 10~15를 추천합니다.")
 
         st.divider()
-        st.header("📲 텔레그램 설정")
-        tg_token = st.text_input("Bot Token", value=config.get("tg_token", ""), type="password")
-        tg_chat_id = st.text_input("Chat ID", value=config.get("tg_chat_id", ""))
-        if st.button("💾 설정 저장"):
-            config.update({"tg_token": tg_token, "tg_chat_id": tg_chat_id})
-            logic.save_config(config)
-            st.success("저장 완료")
+        st.header("📲 텔레그램 알림 설정")
+        
+        # 텔레그램 설정 유무에 따른 동적 UI
+        has_tg_config = config.get("tg_token") and config.get("tg_chat_id")
+        
+        if has_tg_config:
+            st.success("✅ 텔레그램 연결 활성화됨")
+            st.text_input("Bot Token", value="********", disabled=True)
+            st.text_input("Chat ID", value=config.get("tg_chat_id"), disabled=True)
+            if st.button("🗑️ 텔레그램 설정 초기화"):
+                config["tg_token"] = ""
+                config["tg_chat_id"] = ""
+                logic.save_config(config)
+                st.warning("설정이 초기화되었습니다. 다시 입력해 주세요.")
+                st.rerun()
+        else:
+            new_token = st.text_input("Bot Token", type="password", placeholder="토큰을 입력하세요")
+            new_chat_id = st.text_input("Chat ID", placeholder="채팅 ID를 입력하세요")
+            if st.button("💾 설정 저장"):
+                if new_token and new_chat_id:
+                    config.update({"tg_token": new_token, "tg_chat_id": new_chat_id})
+                    logic.save_config(config)
+                    st.success("성공적으로 저장되었습니다!")
+                    st.rerun()
+                else:
+                    st.error("모든 정보를 입력해 주세요.")
 
     # 스캔 로직 (병렬 처리 구현)
     target_key = "KOSPI" if "주식" in target_type else "ETF"
