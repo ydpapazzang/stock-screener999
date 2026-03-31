@@ -174,7 +174,20 @@ with tab2:
                             if r: res_list.append(r)
                     if config.get("tg_token") and config.get("tg_chat_id"):
                         msg_text = logic.format_tg_message(res_list, [sched['strategy']], sched['target']) if res_list else f"🔍 *[{sched['strategy']}]* 결과 없음"
-                        if logic.send_telegram_message(config["tg_token"], config["tg_chat_id"], msg_text): st.success("발송 성공!")
+                        if logic.send_telegram_message(config["tg_token"], config["tg_chat_id"], msg_text): 
+                            st.success("발송 성공!")
+                            # 실행 이력 추가 (수동 발송 기록)
+                            log_entry = {
+                                "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                                "strategy": sched['strategy'] + " (수동)",
+                                "target": sched['target'],
+                                "count": len(res_list),
+                                "status": "Success"
+                            }
+                            if "history" not in config: config["history"] = []
+                            config["history"] = ([log_entry] + config["history"])[:10]
+                            logic.save_config(config)
+                            auto_sync_github() # GitHub 동기화하여 UI 업데이트
                         else: st.error("발송 실패")
             if col3.button("🗑️ 삭제", key=f"del_{sched['id']}"):
                 config['schedules'].pop(idx); logic.save_config(config); auto_sync_github(); st.rerun()
