@@ -162,6 +162,38 @@ def send_telegram_all(token, chat_id, results, strategy_names, target_type):
     requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": chat_id, "text": msg, "parse_mode": "Markdown"})
     return True
 
+def get_dividend_details(symbol):
+    """배당 상세 정보 수집 (계산기용)"""
+    try:
+        yf_sym = f"{symbol}.KS" if symbol.isdigit() and int(symbol) < 900000 else (f"{symbol}.KQ" if symbol.isdigit() else symbol)
+        ticker = yf.Ticker(yf_sym)
+        info = ticker.info
+        
+        dps = info.get('trailingAnnualDividendRate', 0) or info.get('dividendRate', 0) or 0
+        div_yield = info.get('dividendYield', 0) or 0
+        payout = info.get('payoutRatio', 0) or 0
+        
+        # 배당 주기 및 월 예측 (최근 배당 내역 기반)
+        history = ticker.dividends
+        months = []
+        if not history.empty:
+            recent = history.tail(4)
+            months = sorted(list(set(recent.index.month)))
+        
+        # 5년 배당 성장률
+        growth = info.get('dividendGrowthRate', 0) or 0
+        
+        return {
+            "name": info.get('shortName', symbol),
+            "dps": dps,
+            "yield": round(div_yield * 100, 2),
+            "payout": round(payout * 100, 1),
+            "months": months,
+            "growth": round(growth * 100, 1),
+            "currency": info.get('currency', 'KRW')
+        }
+    except: return None
+
 def update_config_to_github(token, repo, content):
     if not token or not repo: return False
     url = f"https://api.github.com/repos/{repo}/contents/config.json"

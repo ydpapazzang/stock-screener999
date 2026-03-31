@@ -5,8 +5,9 @@ import logic
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
+import plotly.express as px
 
-# --- [0] 보안 설정 (Secret 로드) ---
+# --- [0] 보안 설정 ---
 GH_TOKEN = logic.get_secret("GH_TOKEN", "")
 GH_REPO = logic.get_secret("GH_REPO", "ydpapazzang/stock-screener999")
 TG_TOKEN = logic.get_secret("TELEGRAM_TOKEN", "")
@@ -31,14 +32,13 @@ if not st.session_state["authenticated"]:
     st.stop()
 
 # --- [2] 메인 UI ---
-tabs = st.tabs(["🚀 전략 스캔", "📅 알림 설정", "🛠️ 전략 가이드", "⚙️ 시스템"])
+tabs = st.tabs(["🚀 전략 스캔", "📅 알림 설정", "💰 배당 계산기", "🛠️ 전략 가이드", "⚙️ 시스템"])
 
 with tabs[0]:
     st.title("⚡ 지능형 다중 전략 스캐너")
     with st.sidebar:
         st.header("🎯 스캔 설정")
         category = st.selectbox("분석 단위", ["월봉 전략", "주봉 전략", "일봉 전략"])
-        
         if "월봉" in category:
             strats = ["정석 정배열 (추세추종)", "20월선 눌림목 (조정매수)", "거래량 폭발 (세력개입)", "대시세 초입 (20선 돌파)", "월봉 MA12 돌파", "저평가 성장주 (퀀트)"]
             period = 'M'
@@ -48,15 +48,10 @@ with tabs[0]:
         else:
             strats = ["5일 연속 상승세", "외인/기관 쌍끌이 매수", "꾸준한 배당주"]
             period = 'D'
-            
         sel_strats = st.multiselect("전략 선택", strats, default=[strats[0]])
         target = st.radio("대상", ["주식", "ETF"])
-        
-        min_cap = 0; min_amt = 0
-        if target == "주식":
-            min_cap = st.slider("최소 시총 (억)", 0, 5000, 500, 100)
-            min_amt = st.slider("최소 거래대금 (억)", 0, 500, 50, 10)
-        
+        min_cap = st.slider("최소 시총 (억)", 0, 5000, 500, 100) if target=="주식" else 0
+        min_amt = st.slider("최소 거래대금 (억)", 0, 500, 50, 10) if target=="주식" else 0
         limit = st.slider("최대 분석 수", 10, 500, 100)
 
     if st.button("🚀 스캔 시작", use_container_width=True):
@@ -64,17 +59,15 @@ with tabs[0]:
         if not df_list.empty:
             if target == "주식":
                 df_list = df_list[(df_list.get('시총(억)', 0) >= min_cap) & (df_list.get('거래대금(억)', 0) >= min_amt)]
-            
             targets = df_list.head(limit)
             results = []
             p_bar = st.progress(0)
-            with ThreadPoolExecutor(max_workers=10) as exe: # yfinance 부하 고려하여 워커 소폭 하향
+            with ThreadPoolExecutor(max_workers=10) as exe:
                 futures = {exe.submit(logic.process_stock_multi_worker, r.Symbol, r.Name, sel_strats, period): r for r in targets.itertuples()}
                 for i, f in enumerate(as_completed(futures)):
                     res = f.result()
                     if res: results.append(res)
                     p_bar.progress((i+1)/len(targets))
-            
             if results:
                 st.session_state['last_results'] = pd.DataFrame(results).sort_values(by=["점수"], ascending=False)
                 st.success(f"{len(results)}개 종목 포착!")
@@ -84,7 +77,6 @@ with tabs[0]:
         st.dataframe(st.session_state['last_results'], use_container_width=True)
         sel_name = st.selectbox("차트 보기", st.session_state['last_results']['종목명'].tolist())
         if sel_name:
-            # 종목명에서 배당정보 제거하고 코드 찾기
             clean_name = sel_name.split(" (")[0]
             code = st.session_state['last_results'][st.session_state['last_results']['종목명']==sel_name]['코드'].values[0]
             df_chart = logic.get_processed_data(code, period)
@@ -102,8 +94,7 @@ with tabs[1]:
         s = st.selectbox("전략", all_s)
         if st.button("💾 알림 저장"):
             new_s = {"id": str(uuid.uuid4())[:8], "freq": f, "time": t.strftime("%H:%M"), "strategy": s, "target": "주식", "limit": 100}
-            config['schedules'].append(new_s)
-            logic.save_config(config)
+            config['schedules'].append(new_s); logic.save_config(config)
             logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4))
             st.success("저장 완료!"); st.rerun()
 
@@ -113,7 +104,7 @@ with tabs[1]:
             c1.write(f"### 📡 {s['freq']} {s['time']} | {s['strategy']}")
             if c2.button("📡 발송", key=f"t_{s['id']}"):
                 with st.spinner("발송 중..."):
-                    df_l = logic.get_listing_data("주식").head(50) # 테스트는 50개만
+                    df_l = logic.get_listing_data("주식").head(50)
                     res = []
                     with ThreadPoolExecutor(max_workers=5) as exe:
                         futures = [exe.submit(logic.process_stock_multi_worker, r.Symbol, r.Name, [s['strategy']], 'D') for r in df_l.itertuples()]
@@ -123,16 +114,89 @@ with tabs[1]:
                     st.success("발송 완료!")
             if c3.button("🗑️ 삭제", key=f"d_{s['id']}"):
                 config['schedules'].pop(i); logic.save_config(config)
-                logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4))
-                st.rerun()
+                logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4)); st.rerun()
 
 with tabs[2]:
+    st.title("💰 스마트 배당금 계산기")
+    
+    if "portfolio" not in st.session_state:
+        st.session_state.portfolio = []
+
+    # [1] 입력 섹션
+    with st.expander("➕ 보유 종목 추가", expanded=True):
+        c1, c2, c3 = st.columns(3)
+        in_symbol = c1.text_input("티커/코드", placeholder="예: 005930 또는 O")
+        in_qty = c2.number_input("보유 수량", min_value=1, value=10)
+        in_price = c3.number_input("평균 단가", min_value=0.0, value=50000.0)
+        if st.button("포트폴리오에 추가"):
+            with st.spinner("데이터 조회 중..."):
+                details = logic.get_dividend_details(in_symbol)
+                if details:
+                    details.update({"qty": in_qty, "avg_price": in_price})
+                    st.session_state.portfolio.append(details)
+                    st.success(f"{details['name']} 추가됨!")
+                else: st.error("종목 정보를 찾을 수 없습니다.")
+
+    if st.session_state.portfolio:
+        df_port = pd.DataFrame(st.session_state.portfolio)
+        
+        # [2] 요약 대시보드
+        st.divider()
+        total_invest = (df_port['qty'] * df_port['avg_price']).sum()
+        total_div = (df_port['qty'] * df_port['dps']).sum()
+        yoc = (total_div / total_invest * 100) if total_invest > 0 else 0
+        
+        m1, m2, c3, m4 = st.columns(4)
+        m1.metric("총 투자금액", f"{total_invest:,.0f} {df_port['currency'].iloc[0]}")
+        m2.metric("연간 예상 배당금", f"{total_div:,.0f} {df_port['currency'].iloc[0]}")
+        c3.metric("월 평균 수령액", f"{total_div/12:,.0f}")
+        m4.metric("평균 배당수익률(YOC)", f"{yoc:.2f}%")
+
+        # [기능 1] 월별 배당 캘린더
+        st.subheader("🗓️ 월별 배당 캘린더")
+        monthly_data = {m: 0 for m in range(1, 13)}
+        for p in st.session_state.portfolio:
+            if p['months']:
+                d_per_month = (p['qty'] * p['dps']) / len(p['months'])
+                for m in p['months']: monthly_data[m] += d_per_month
+        
+        df_month = pd.DataFrame({"Month": [f"{m}월" for m in range(1, 13)], "Amount": list(monthly_data.values())})
+        fig_cal = px.bar(df_month, x="Month", y="Amount", title="월별 배당금 분포", color="Amount", color_continuous_scale="Viridis")
+        st.plotly_chart(fig_cal, use_container_width=True)
+
+        # [기능 2] 배당 재투자 시뮬레이션
+        st.subheader("📈 배당 재투자(DRIP) 시뮬레이션")
+        years = st.slider("시뮬레이션 기간 (년)", 1, 30, 10)
+        reinvest_rate = st.slider("배당 재투자 비율 (%)", 0, 100, 100) / 100
+        
+        values = [total_invest]
+        current_val = total_invest
+        for y in range(years):
+            div = current_val * (yoc/100)
+            current_val += (div * reinvest_rate) + (current_val * 0.05) # 연 5% 주가상승 가정
+            values.append(current_val)
+        
+        fig_drip = px.line(x=list(range(years+1)), y=values, title=f"{years}년 후 예상 자산 변화 (재투자 포함)", labels={"x": "경과 년수", "y": "자산 가치"})
+        st.plotly_chart(fig_drip, use_container_width=True)
+
+        # [기능 3 & 4] 리스트 및 세금
+        st.subheader("📋 포트폴리오 상세 및 세금 분석")
+        df_display = df_port[['name', 'dps', 'yield', 'payout', 'qty']].copy()
+        df_display['실수령액(세후)'] = (df_port['qty'] * df_port['dps'] * 0.846).round(0) # 15.4% 세금
+        st.dataframe(df_display, use_container_width=True)
+        
+        if st.button("🗑️ 포트폴리오 초기화"):
+            st.session_state.portfolio = []; st.rerun()
+    else:
+        st.info("보유 종목을 추가하여 배당 대시보드를 생성하세요.")
+
+with tabs[3]:
     st.title("🛠️ 전략 가이드")
     all_s = ["정석 정배열 (추세추종)", "20월선 눌림목 (조정매수)", "거래량 폭발 (세력개입)", "5일 연속 상승세", "저평가 성장주 (퀀트)", "외인/기관 쌍끌이 매수", "꾸준한 배당주"]
     sel = st.selectbox("전략 선택", all_s)
     st.info(logic.get_strategy_desc(sel))
 
-with tabs[3]:
+with tabs[4]:
     st.title("⚙️ 시스템 정보")
     if st.button("🚀 GitHub 강제 동기화"):
         if logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4)): st.success("동기화 성공!")
