@@ -88,7 +88,18 @@ with tab1:
                     st.write(logic.get_strategy_desc(s_name))
         st.divider()
         target_type = st.radio("분석 대상", ["주식 (KOSPI 200)", "ETF"])
-        scan_limit = st.slider("스캔 종목 수", 10, 200 if "주식" in target_type else 1000, 100)
+        
+        if "주식" in target_type:
+            st.subheader("🔍 필터 조건 (주식 전용)")
+            min_marcap = st.slider("최소 시가총액 (억원)", 0, 5000, 500, step=100)
+            min_amount = st.slider("최소 거래대금 (억원/일)", 0, 500, 50, step=10)
+            max_scan = 500
+        else:
+            min_marcap, min_amount = 0, 0
+            max_scan = 1000
+            
+        scan_limit = st.slider("최대 분석 종목 수", 10, max_scan, 100)
+        
         st.divider()
         st.header("📲 텔레그램 설정")
         if config.get("tg_token") and config.get("tg_chat_id"):
@@ -104,26 +115,54 @@ with tab1:
     target_key = "KOSPI" if "주식" in target_type else "ETF"
     df_list = logic.get_listing_data(target_key)
     if st.button(f"🚀 {len(selected_strategies)}개 복합 전략 스캔 시작", use_container_width=True):
-        if not selected_strategies: st.warning("최소 하나 이상의 전략을 선택하세요.")
-        elif df_list.empty: st.error("데이터 로드 실패")
+        if not selected_strategies:
+            st.warning("최소 하나 이상의 전략을 선택하세요.")
+        elif df_list.empty:
+            st.error("데이터 로드 실패")
         else:
-            results = []; p_bar = st.progress(0); targets = df_list.iloc[:scan_limit]
-            start_time = time.time()
-            with ThreadPoolExecutor(max_workers=15) as executor:
-                futures = {executor.submit(logic.process_stock_multi_worker, r.Symbol, r.Name, selected_strategies, period_key): r for r in targets.itertuples()}
-                for i, future in enumerate(as_completed(futures)):
-                    res = future.result()
-                    if res: results.append(res)
-                    p_bar.progress((i + 1) / len(targets))
-            p_bar.empty()
-            st.session_state['multi_scan_results'] = results
-            st.session_state['multi_period_key'] = period_key
-            st.session_state['used_strategies'] = selected_strategies
-            st.success(f"✅ 분석 완료! {len(results)}개 종목 포착 ({time.time()-start_time:.1f}초)")
+            # [필터 적용] 시총 및 거래대금 기준
+            if "주식" in target_type:
+                df_filtered = df_list.copy()
+                if '시총(억)' in df_filtered.columns:
+                    df_filtered = df_filtered[df_filtered['시총(억)'] >= min_marcap]
+                if '거래대금(억)' in df_filtered.columns:
+                    df_filtered = df_filtered[df_filtered['거래대금(억)'] >= min_amount]
+                targets = df_filtered.iloc[:scan_limit]
+            else:
+                targets = df_list.iloc[:scan_limit]
+            
+            if targets.empty:
+                st.warning("필터 조건에 맞는 종목이 없습니다. 조건을 완화해보세요.")
+            else:
+                results = []
+                p_bar = st.progress(0)
+                start_time = time.time()
+                
+                with ThreadPoolExecutor(max_workers=15) as executor:
+                    futures = {executor.submit(logic.process_stock_multi_worker, r.Symbol, r.Name, selected_strategies, period_key): r for r in targets.itertuples()}
+                    for i, future in enumerate(as_completed(futures)):
+                        res = future.result()
+                        if res: results.append(res)
+                        p_bar.progress((i + 1) / len(targets))
+                
+                p_bar.empty()
+                st.session_state['multi_scan_results'] = results
+                st.session_state['multi_period_key'] = period_key
+                st.session_state['used_strategies'] = selected_strategies
+                st.success(f"✅ 분석 완료! {len(results)}개 종목 포착 ({time.time()-start_time:.1f}초)")
 
+    # 결과 및 차트 섹션
     if st.session_state.get('multi_scan_results'):
-        df_res = pd.DataFrame(st.session_state['multi_scan_results']).sort_values(by=["신규감지", "승률"], ascending=[False, False])
-        st.subheader("🎯 포착된 종목 리스트")
+        df_res = pd.DataFrame(st.session_state['multi_scan_results'])
+        # [정렬] 점수 높은 순 -> 신규감지(Y) -> 승률 순
+        sort_cols = []
+        if '점수' in df_res.columns: sort_cols.append('점수')
+        if '신규감지' in df_res.columns: sort_cols.append('신규감지')
+        if '승률' in df_res.columns: sort_cols.append('승률')
+        
+        df_res = df_res.sort_values(by=sort_cols, ascending=[False] * len(sort_cols))
+        st.subheader(f"🎯 전략 적중 종목 (총 {len(df_res)}개)")
+        st.caption("💡 점수(Score)는 선택한 전략 중 일치하는 비율입니다. (100점 = 모든 전략 일치)")
         st.dataframe(df_res, use_container_width=True)
         st.divider()
         st.subheader("📊 신호 발생 타점 차트 시각화")

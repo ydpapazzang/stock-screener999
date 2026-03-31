@@ -194,52 +194,63 @@ def create_advanced_chart(df, name, strategy_list):
 
 # --- [4] 기타 및 병렬 처리 (Force Update 0331) ---
 def get_listing_data(target):
-    """종목 리스트 로드 (에러 방지 로직 강화)"""
+    """종목 리스트 로드 (시총, 거래대금 정보 포함)"""
     try:
         if target == "ETF":
             df = fdr.StockListing('ETF/KR')
             return df[['Symbol', 'Name']]
         else:
-            # KOSPI 대신 KRX 전체를 시도해보고, 상위 종목만 필터링
+            # KRX 전체 데이터 (시총, 거래대금 포함)
             df = fdr.StockListing('KRX')
             
-            # 컬럼명 대응 (Code/Symbol, Name/Name)
-            if 'Code' in df.columns:
-                df = df.rename(columns={'Code': 'Symbol'})
+            # 컬럼명 통일
+            col_map = {'Code': 'Symbol', 'Marcap': '시가총액', 'Amount': '거래대금'}
+            df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
             
-            # 시장 필터링 (주식만)
+            # 시장 필터링
             if 'Market' in df.columns:
                 df = df[df['Market'].isin(['KOSPI', 'KOSDAQ'])]
             
-            # 시가총액순 정렬 (Marcap 또는 Stocks)
-            sort_col = 'Marcap' if 'Marcap' in df.columns else (df.columns[df.columns.str.contains('시가총액|Marcap', case=False)][0] if any(df.columns.str.contains('시가총액|Marcap', case=False)) else None)
+            # 시가총액 단위 변경 (원 -> 억)
+            if '시가총액' in df.columns:
+                df['시총(억)'] = (df['시가총액'] / 100000000).round(0)
             
-            if sort_col:
-                df = df.sort_values(by=sort_col, ascending=False)
+            # 거래대금 단위 변경 (원 -> 억)
+            if '거래대금' in df.columns:
+                df['거래대금(억)'] = (df['거래대금'] / 100000000).round(0)
             
-            return df[['Symbol', 'Name']].head(200)
+            return df
     except Exception as e:
         print(f"DEBUG: 데이터 로드 중 에러 발생 - {e}")
-        # 예비 수단: FinanceDataReader 내부의 다른 인덱스 시도
-        try:
-            df = fdr.StockListing('KOSPI')
-            if 'Code' in df.columns: df = df.rename(columns={'Code': 'Symbol'})
-            return df[['Symbol', 'Name']].head(200)
-        except:
-            return pd.DataFrame()
+        return pd.DataFrame()
 
 def process_stock_multi_worker(symbol, name, strategy_list, period_key):
     df_data = get_processed_data(symbol, period_key)
     if df_data is not None and len(df_data) >= 2:
-        signals = check_multi_signals(df_data, strategy_list)
-        if signals.iloc[-1]:
-            is_new = "Y" if not signals.iloc[-2] else "N"
+        # 각 전략별로 개별 체크하여 점수 계산
+        match_count = 0
+        hit_strategies = []
+        
+        for s in strategy_list:
+            res = check_multi_signals(df_data, [s])
+            if res.iloc[-1]:
+                match_count += 1
+                hit_strategies.append(s)
+        
+        if match_count > 0:
+            score = round((match_count / len(strategy_list)) * 100)
+            is_new = "Y" if match_count > 0 and len(hit_strategies) > 0 else "N" # 간소화
+            
             curr = df_data.iloc[-1]
-            # 전략에 따라 이격도 기준선 변경
             ref_ma = curr['ma30'] if "와인스타인" in "".join(strategy_list) else curr['ma20']
             disp = (curr['Close'] / ref_ma - 1) * 100
             win, ret, cnt = fast_backtest_multi(df_data, strategy_list, period_key)
-            return {"코드": symbol, "종목명": name, "현재가": f"{int(curr['Close']):,}", "승률": win, "평균수익": f"{ret}%", "신호수": cnt, "신규감지": is_new, "이격도": f"{disp:+.1f}%"}
+            
+            return {
+                "코드": symbol, "종목명": name, "점수": score, 
+                "현재가": f"{int(curr['Close']):,}", "승률": win, "평균수익": f"{ret}%", 
+                "일치전략": ", ".join(hit_strategies), "신규감지": is_new, "이격도": f"{disp:+.1f}%"
+            }
     return None
 
 def format_tg_message(results, strategy_names, target_type):
