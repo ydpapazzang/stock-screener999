@@ -9,6 +9,14 @@
             "strategy": "거래량 폭발 (세력개입)",
             "target": "주식 (KOSPI 200)",
             "limit": 100
+        },
+        {
+            "id": "46334e30",
+            "freq": "매일",
+            "time": "06:00",
+            "strategy": "거래량 폭발 (세력개입)",
+            "target": "ETF",
+            "limit": 100
         }
     ],
     "password": "6666",
