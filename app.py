@@ -69,7 +69,7 @@ if not st.session_state["authenticated"]:
     st.stop()
 
 # --- [2] 메인 UI ---
-tab1, tab2, tab3 = st.tabs(["🚀 복합 전략 스캔 & 차트", "📅 자동 알림 설정", "⚙️ 시스템 설정"])
+tab1, tab2, tab_strat, tab3 = st.tabs(["🚀 복합 전략 스캔 & 차트", "📅 자동 알림 설정", "🛠️ 전략 관리 & 생성", "⚙️ 시스템 설정"])
 
 with tab1:
     st.title("⚡ 다중 필터 스케닝 & 타점 분석")
@@ -87,10 +87,15 @@ with tab1:
             
         selected_strategies = st.multiselect("사용할 전략들을 선택하세요 (모두 만족 시 포착)", all_strats, default=[all_strats[0]])
         
-        # 전략 설명 추가
-        if "와인스타인 2단계 돌파" in selected_strategies:
-            st.info("**[와인스타인 2단계]**\n- 30주 이평선 우상향 + 가격 돌파 + 거래량 실림\n- '바닥권 탈출'과 '상승 국면 진입'을 포착하는 추세매매의 정석입니다.")
+        # 선택한 모든 전략의 설명을 사이드바에 표시
+        if selected_strategies:
+            st.divider()
+            st.subheader("📝 선택된 전략 설명")
+            for s_name in selected_strategies:
+                with st.expander(f"🔹 {s_name}", expanded=True):
+                    st.write(logic.get_strategy_desc(s_name))
         
+        st.divider()
         target_type = st.radio("분석 대상", ["주식 (KOSPI 200)", "ETF"])
         max_scan = 200 if "주식" in target_type else 1000
         scan_limit = st.slider("스캔 종목 수", 10, max_scan, 100)
@@ -158,7 +163,7 @@ with tab1:
                     st.plotly_chart(fig, use_container_width=True)
                     st.caption("💡 녹색 화살표(▲)는 선택한 모든 전략 조건이 동시에 만족되었던 시점입니다.")
 
-# --- 탭 2 & 탭 3 (기존 기능 유지) ---
+# --- 탭 2 자동 알림 설정 ---
 with tab2:
     st.title("📅 자동 알림 스케줄 관리")
     import uuid
@@ -175,7 +180,6 @@ with tab2:
             config['schedules'].append(new_schedule)
             logic.save_config(config)
             st.success("등록됨!")
-            # 자동 동기화 실행
             auto_sync_github()
             st.rerun()
 
@@ -183,7 +187,6 @@ with tab2:
     for idx, sched in enumerate(schedules):
         with st.container(border=True):
             col1, col2 = st.columns([4, 1])
-            # 대상(Target) 정보를 포함하여 표시
             target_info = sched.get('target', '정보 없음')
             col1.markdown(f"### 📡 {sched['freq']} {sched['time']} | {sched['strategy']}")
             col1.caption(f"🎯 대상: {target_info} | 스캔 제한: {sched.get('limit', 100)}개")
@@ -192,17 +195,47 @@ with tab2:
                 with st.spinner("저장소 동기화 중..."):
                     config['schedules'].pop(idx)
                     logic.save_config(config)
-                    # 자동 동기화 실행
                     auto_sync_github()
                 st.rerun()
 
+# --- 탭 전략 관리 ---
+with tab_strat:
+    st.title("🛠️ 전략 관리 및 상세 설명")
+    st.write("시스템에 내장된 전략들의 상세 매매 로직과 활용법을 확인합니다.")
+    
+    st.divider()
+    all_existing = [
+        "정석 정배열 (추세추종)", "20월선 눌림목 (조정매수)", "거래량 폭발 (세력개입)", 
+        "대시세 초입 (20선 돌파)", "월봉 MA12 돌파", "주봉 5/20 골든크로스", 
+        "주봉 RSI 과매도 탈출", "주봉 볼린저 하단 터치", "주봉 20선 돌파 및 안착", "와인스타인 2단계 돌파"
+    ]
+    
+    sel_info = st.selectbox("설명을 보려는 전략을 선택하세요", all_existing, key="strat_desc_select")
+    if sel_info:
+        st.info(f"### 📖 {sel_info}\n\n{logic.get_strategy_desc(sel_info)}")
+
+    st.divider()
+    st.subheader("➕ 나만의 복합 전략 만들기")
+    st.write("여러 조건을 조합하여 나만의 필터를 만들 수 있습니다.")
+    
+    with st.expander("💡 복합 전략 가이드", expanded=False):
+        st.markdown("""
+        **복합 전략이란?**
+        - 메인 화면의 사이드바에서 여러 개의 전략을 동시에 선택하는 것을 의미합니다.
+        - 선택된 모든 조건이 **AND(교집합)**로 적용되어, 훨씬 정교한 타점을 찾아냅니다.
+        
+        **추천 조합:**
+        1. **[추세 + 거래량]**: '와인스타인 2단계' + '거래량 폭발'
+        2. **[낙폭과대 + 반등]**: '주봉 볼린저 하단' + '주봉 RSI 과매도 탈출'
+        3. **[이평선 돌파 + 안착]**: '대시세 초입' + '주봉 20선 돌파'
+        """)
+
+# --- 탭 시스템 설정 ---
 with tab3:
     st.title("⚙️ 시스템 설정")
-    
     st.subheader("🔄 GitHub 동기화 (Cloud 전용)")
     st.info("웹에서 변경한 스케줄이 GitHub Actions에 반영되려면 GitHub API를 통해 동기화해야 합니다.")
     
-    # 세션 스테이트와 연동된 입력창
     gh_token_input = st.text_input("GitHub Personal Access Token (PAT)", 
                                    value=st.session_state["gh_token"],
                                    type="password", 
@@ -211,7 +244,6 @@ with tab3:
                                   value=st.session_state["gh_repo"],
                                   help="계정명/저장소명 형식으로 입력하세요.")
     
-    # 세션 스테이트 업데이트를 위한 저장 버튼 (또는 입력 시 즉시 반영)
     if gh_token_input != st.session_state["gh_token"] or gh_repo_input != st.session_state["gh_repo"]:
         st.session_state["gh_token"] = gh_token_input
         st.session_state["gh_repo"] = gh_repo_input
@@ -221,7 +253,6 @@ with tab3:
 
     st.divider()
     st.subheader("🔑 비밀번호 변경")
-    # ... (기존 비밀번호 변경 로직 동일하게 유지)
     current_pw = st.text_input("현재 비밀번호", type="password")
     new_pw = st.text_input("새 비밀번호", type="password")
     if st.button("비밀번호 변경"):

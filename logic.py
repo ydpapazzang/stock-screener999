@@ -89,14 +89,44 @@ def check_multi_signals(df, strategy_list):
         final_cond &= cond
     return final_cond
 
+def get_strategy_desc(strategy_name):
+    """전략별 상세 설명을 반환"""
+    descriptions = {
+        "정석 정배열 (추세추종)": "5 > 20 > 60 이평선 정배열 상태에서 현재가가 5선 위에 있는 강력한 추세 구간입니다.",
+        "20월선 눌림목 (조정매수)": "장기 추세(60선)가 살아있는 상태에서 20월선 근처까지 내려온 '싸게 살 기회'를 포착합니다.",
+        "거래량 폭발 (세력개입)": "평소 거래량의 2배 이상이 터지며 양봉을 만든 종목으로, 세력의 매집이나 강한 모멘텀을 의미합니다.",
+        "대시세 초입 (20선 돌파)": "오랫동안 하락하거나 횡보하던 주가가 20선(황금선)을 강력하게 뚫고 올라오는 시점입니다.",
+        "월봉 MA12 돌파": "1년 평균선인 12월선을 돌파하는 시점으로, 중장기적인 추세 반전을 의미합니다.",
+        "주봉 5/20 골든크로스": "단기 추세가 중기 추세를 돌파하며 상승 에너지가 응축되는 시점입니다.",
+        "주봉 RSI 과매도 탈출": "RSI 30 이하에서 탈출하는 시점으로, 과도한 낙폭 후의 반등 타점입니다.",
+        "주봉 볼린저 하단 터치": "볼린저 밴드 하단에 닿은 종목으로, 기술적 반등을 노리는 역추세 매매 타점입니다.",
+        "주봉 20선 돌파 및 안착": "주봉상 주요 저항선인 20주선을 거래량과 함께 돌파하는 실질적인 상승 시작점입니다.",
+        "와인스타인 2단계 돌파": "30주 이평선 우상향 + 가격 돌파 + 거래량 실림. 바닥권을 탈출하는 가장 정석적인 타점입니다."
+    }
+    return descriptions.get(strategy_name, "설명이 등록되지 않은 전략입니다.")
+
 def fast_backtest_multi(df, strategy_list, period='M'):
+    """첫 진입점(Entry Point) 기준의 백테스팅 로직"""
     if df is None or len(df) < 65: return 0, 0, 0
     hold = 6 if period == 'M' else 4
     signals = check_multi_signals(df, strategy_list)
-    testable = signals.iloc[:-hold]
+    
+    # [수정] 신호가 False -> True로 바뀌는 시점만 추출 (첫 진입점)
+    entry_signals = signals & (~signals.shift(1).fillna(False))
+    
+    testable = entry_signals.iloc[:-hold]
     matches = testable[testable == True].index
+    
     if len(matches) == 0: return 0, 0, 0
-    profits = [(df.iloc[df.index.get_loc(d) + hold]['Close'] / df.iloc[df.index.get_loc(d)]['Close'] - 1) * 100 for d in matches]
+    
+    profits = []
+    for d in matches:
+        idx = df.index.get_loc(d)
+        buy_price = df.iloc[idx]['Close']
+        sell_price = df.iloc[idx + hold]['Close']
+        profit = (sell_price / buy_price - 1) * 100
+        profits.append(profit)
+        
     return round(np.mean(np.array(profits) > 0) * 100, 1), round(np.mean(profits), 1), len(profits)
 
 # --- [3] 타점 표시 차트 로직 ---
