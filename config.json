@@ -3,14 +3,6 @@
     "tg_chat_id": "1782176235",
     "schedules": [
         {
-            "id": "14ad11ca",
-            "freq": "매일",
-            "time": "10:15",
-            "strategy": "정석 정배열 (추세추종)",
-            "target": "ETF",
-            "limit": 100
-        },
-        {
             "id": "769dc6bb",
             "freq": "매일",
             "time": "10:30",
