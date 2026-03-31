@@ -150,7 +150,11 @@ with tab3:
     gh_repo = st.text_input("GitHub Repository", value="ydpapazzang/stock-screener999", help="계정명/저장소명 형식으로 입력하세요.")
     
     if st.button("🚀 설정 파일을 GitHub에 동기화 (API Push)"):
-        if not gh_token or not gh_repo:
+        # 앞뒤 공백 및 보이지 않는 특수문자 제거
+        clean_token = gh_token.strip()
+        clean_repo = gh_repo.strip()
+        
+        if not clean_token or not clean_repo:
             st.error("❌ GitHub 토큰과 저장소 정보를 입력해주세요.")
         else:
             try:
@@ -159,8 +163,8 @@ with tab3:
                 config_content = json.dumps(config, ensure_ascii=False, indent=4)
                 
                 success = logic.update_config_to_github(
-                    token=gh_token,
-                    repo=gh_repo,
+                    token=clean_token,
+                    repo=clean_repo,
                     path="config.json",
                     message="Update schedules via Streamlit UI (API)",
                     content=config_content
