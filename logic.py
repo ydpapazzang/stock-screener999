@@ -164,13 +164,25 @@ def send_telegram_message(token, chat_id, message):
         return res.status_code == 200
     except: return False
 
-def format_tg_message(results, strategy_names, target_type):
-    now_str = datetime.now().strftime('%Y-%m-%d %H:%M')
-    msg = f"🚀 *[전략 포착]* 스캔 결과\n"
-    msg += f"🎯 전략: {', '.join(strategy_names)}\n"
-    msg += f"📊 포착: {len(results)}개 | {target_type}\n\n"
-    sorted_res = sorted(results, key=lambda x: x.get('승률', 0), reverse=True)
-    for i, item in enumerate(sorted_res[:10]):
-        msg += f"{i+1}. *{item['종목명']}* (승률: {item['승률']}%)\n"
-        msg += f"   - 수익: {item['평균수익']} | 신규: {item['신규감지']}\n"
-    return msg
+def update_config_to_github(token, repo, path, message, content):
+    """GitHub API를 통해 파일을 직접 커밋/푸시"""
+    url = f"https://api.github.com/repos/{repo}/contents/{path}"
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+    
+    # 1. 기존 파일의 SHA 값 가져오기
+    res = requests.get(url, headers=headers)
+    sha = ""
+    if res.status_code == 200:
+        sha = res.json().get("sha")
+    
+    # 2. 파일 업데이트
+    import base64
+    encoded_content = base64.b64encode(content.encode("utf-8")).decode("utf-8")
+    data = {
+        "message": message,
+        "content": encoded_content,
+        "sha": sha
+    }
+    
+    res = requests.put(url, headers=headers, json=data)
+    return res.status_code in [200, 201]

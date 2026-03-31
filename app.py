@@ -143,21 +143,35 @@ with tab2:
 with tab3:
     st.title("⚙️ 시스템 설정")
     
-    st.subheader("🔄 GitHub 동기화")
-    st.info("웹에서 변경한 스케줄이 GitHub Actions(자동 알림)에 반영되려면 저장소에 동기화해야 합니다.")
-    if st.button("🚀 설정 파일을 GitHub에 동기화 (Push)"):
-        try:
-            import subprocess
-            # 파일 저장 먼저 확인
-            logic.save_config(config)
-            # Git 명령 실행
-            subprocess.run(["git", "add", "config.json"], check=True)
-            subprocess.run(["git", "commit", "-m", "Update schedules via Streamlit UI"], check=True)
-            subprocess.run(["git", "push", "origin", "main"], check=True)
-            st.success("✅ GitHub 동기화 성공! 이제 설정된 시간에 알림이 올 것입니다.")
-        except Exception as e:
-            st.error(f"❌ 동기화 실패: {e}")
-            st.info("팁: Streamlit Cloud 환경에서 Git Push를 하려면 적절한 권한(Write Access)이 설정되어 있어야 합니다.")
+    st.subheader("🔄 GitHub 동기화 (Cloud 전용)")
+    st.info("웹에서 변경한 스케줄이 GitHub Actions에 반영되려면 GitHub API를 통해 동기화해야 합니다.")
+    
+    gh_token = st.text_input("GitHub Personal Access Token (PAT)", type="password", help="repo 권한이 있는 토큰이 필요합니다.")
+    gh_repo = st.text_input("GitHub Repository", value="ydpapazzang/stock-screener999", help="계정명/저장소명 형식으로 입력하세요.")
+    
+    if st.button("🚀 설정 파일을 GitHub에 동기화 (API Push)"):
+        if not gh_token or not gh_repo:
+            st.error("❌ GitHub 토큰과 저장소 정보를 입력해주세요.")
+        else:
+            try:
+                # 현재 설정을 JSON 문자열로 변환
+                import json
+                config_content = json.dumps(config, ensure_ascii=False, indent=4)
+                
+                success = logic.update_config_to_github(
+                    token=gh_token,
+                    repo=gh_repo,
+                    path="config.json",
+                    message="Update schedules via Streamlit UI (API)",
+                    content=config_content
+                )
+                
+                if success:
+                    st.success("✅ GitHub API 동기화 성공! 이제 설정된 시간에 알림이 올 것입니다.")
+                else:
+                    st.error("❌ GitHub API 호출 실패. 토큰 권한이나 저장소 이름을 확인하세요.")
+            except Exception as e:
+                st.error(f"❌ 동기화 중 오류 발생: {e}")
 
     st.divider()
     st.subheader("🔑 비밀번호 변경")
