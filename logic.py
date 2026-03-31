@@ -127,7 +127,7 @@ def create_advanced_chart(df, name, strategy_list):
     fig.update_layout(title=f"{name} (타점 및 30주선 표시)", template="plotly_dark", xaxis_rangeslider_visible=False, height=600)
     return fig
 
-# --- [4] 기타 및 병렬 처리 ---
+# --- [4] 기타 및 병렬 처리 (Force Update 0331) ---
 @st.cache_data(ttl=3600)
 def get_listing_data(target):
     try:
