@@ -17,6 +17,14 @@
             "strategy": "정석 정배열 (추세추종)",
             "target": "ETF",
             "limit": 100
+        },
+        {
+            "id": "769dc6bb",
+            "freq": "매일",
+            "time": "10:30",
+            "strategy": "20월선 눌림목 (조정매수)",
+            "target": "주식 (KOSPI 200)",
+            "limit": 100
         }
     ],
     "password": "6666"
