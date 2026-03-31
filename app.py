@@ -46,7 +46,7 @@ with tabs[0]:
             strats = ["주봉 5/20 골든크로스", "주봉 RSI 과매도 탈출", "주봉 볼린저 하단 터치", "주봉 20선 돌파 및 안착", "와인스타인 2단계 돌파"]
             period = 'W'
         else:
-            strats = ["5일 연속 상승세", "외인/기관 쌍끌이 매수"]
+            strats = ["5일 연속 상승세", "외인/기관 쌍끌이 매수", "꾸준한 배당주"]
             period = 'D'
             
         sel_strats = st.multiselect("전략 선택", strats, default=[strats[0]])
@@ -100,7 +100,7 @@ with tabs[1]:
         col1, col2 = st.columns(2)
         f = col1.selectbox("주기", ["매일", "매주 (월요일)", "매월 (1일)", "매월 (말일)"])
         t = col2.time_input("시간", datetime.strptime("09:00", "%H:%M").time())
-        s = st.selectbox("전략", ["정석 정배열 (추세추종)", "20월선 눌림목 (조정매수)", "거래량 폭발 (세력개입)", "주봉 5/20 골든크로스", "5일 연속 상승세", "저평가 성장주 (퀀트)", "외인/기관 쌍끌이 매수"])
+        s = st.selectbox("전략", ["정석 정배열 (추세추종)", "20월선 눌림목 (조정매수)", "거래량 폭발 (세력개입)", "주봉 5/20 골든크로스", "5일 연속 상승세", "저평가 성장주 (퀀트)", "외인/기관 쌍끌이 매수", "꾸준한 배당주"])
         if st.button("💾 알림 저장"):
             new_s = {"id": str(uuid.uuid4())[:8], "freq": f, "time": t.strftime("%H:%M"), "strategy": s, "target": "주식", "limit": 100}
             config['schedules'].append(new_s)
@@ -132,7 +132,7 @@ with tabs[1]:
 
 with tabs[2]:
     st.title("🛠️ 전략 가이드")
-    s_list = ["정석 정배열 (추세추종)", "20월선 눌림목 (조정매수)", "거래량 폭발 (세력개입)", "5일 연속 상승세", "저평가 성장주 (퀀트)", "외인/기관 쌍끌이 매수"]
+    s_list = ["정석 정배열 (추세추종)", "20월선 눌림목 (조정매수)", "거래량 폭발 (세력개입)", "5일 연속 상승세", "저평가 성장주 (퀀트)", "외인/기관 쌍끌이 매수", "꾸준한 배당주"]
     sel = st.selectbox("전략 선택", s_list)
     st.info(logic.get_strategy_desc(sel))
 

@@ -115,6 +115,10 @@ def check_multi_signals(df, strategy_list):
             cond = (df['ma60'] > df['ma60'].shift(20)) & (df['Close'] > df['ma20']) & (df['rsi'] > 50)
         elif strategy == "외인/기관 쌍끌이 매수":
             cond = (df['Close'] > df['Close'].shift(1)) & (df['Volume'] > df['vol_ma5'] * 1.5)
+        elif strategy == "꾸준한 배당주":
+            # 배당주 특성: 저변동성(볼린저밴드 수축) + RSI 바닥권(낙폭과대)
+            bb_width = (df['ma20'] - df['bb_lower']) / df['ma20']
+            cond = (bb_width < 0.05) & (df['rsi'] < 45) & (df['Close'] > df['ma60'] * 0.95)
         else: cond = pd.Series(False, index=df.index)
         final_cond &= cond
     return final_cond
@@ -213,7 +217,8 @@ def get_strategy_desc(s):
         "주봉 볼린저 하단 터치": "볼린저 밴드 하단선 지지를 노리는 역추세 전략.",
         "5일 연속 상승세": "5거래일 연속 종가 상승 (강한 단기 모멘텀).",
         "저평가 성장주 (퀀트)": "저PER + 장기 정배열 + 상승 모멘텀.",
-        "외인/기관 쌍끌이 매수": "수급 주체의 동반 매수로 추정되는 강한 가격/거래량 상승."
+        "외인/기관 쌍끌이 매수": "수급 주체의 동반 매수로 추정되는 강한 가격/거래량 상승.",
+        "꾸준한 배당주": "저변동성 구간에서 RSI가 낮은 바닥권 종목 (배당수익+반등 노림)."
     }
     return descs.get(s, "설명 없음")
 
