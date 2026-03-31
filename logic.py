@@ -193,19 +193,40 @@ def create_advanced_chart(df, name, strategy_list):
     return fig
 
 # --- [4] 기타 및 병렬 처리 (Force Update 0331) ---
-@safe_cache(ttl=3600)
 def get_listing_data(target):
+    """종목 리스트 로드 (에러 방지 로직 강화)"""
     try:
         if target == "ETF":
             df = fdr.StockListing('ETF/KR')
             return df[['Symbol', 'Name']]
         else:
+            # KOSPI 대신 KRX 전체를 시도해보고, 상위 종목만 필터링
+            df = fdr.StockListing('KRX')
+            
+            # 컬럼명 대응 (Code/Symbol, Name/Name)
+            if 'Code' in df.columns:
+                df = df.rename(columns={'Code': 'Symbol'})
+            
+            # 시장 필터링 (주식만)
+            if 'Market' in df.columns:
+                df = df[df['Market'].isin(['KOSPI', 'KOSDAQ'])]
+            
+            # 시가총액순 정렬 (Marcap 또는 Stocks)
+            sort_col = 'Marcap' if 'Marcap' in df.columns else (df.columns[df.columns.str.contains('시가총액|Marcap', case=False)][0] if any(df.columns.str.contains('시가총액|Marcap', case=False)) else None)
+            
+            if sort_col:
+                df = df.sort_values(by=sort_col, ascending=False)
+            
+            return df[['Symbol', 'Name']].head(200)
+    except Exception as e:
+        print(f"DEBUG: 데이터 로드 중 에러 발생 - {e}")
+        # 예비 수단: FinanceDataReader 내부의 다른 인덱스 시도
+        try:
             df = fdr.StockListing('KOSPI')
-            df = df.rename(columns={'Code': 'Symbol', 'Marcap': 'MarCap'})
-            if 'MarCap' in df.columns:
-                df = df.sort_values(by='MarCap', ascending=False)
-            return df[['Symbol', 'Name', 'MarCap']].head(200)
-    except: return pd.DataFrame()
+            if 'Code' in df.columns: df = df.rename(columns={'Code': 'Symbol'})
+            return df[['Symbol', 'Name']].head(200)
+        except:
+            return pd.DataFrame()
 
 def process_stock_multi_worker(symbol, name, strategy_list, period_key):
     df_data = get_processed_data(symbol, period_key)
