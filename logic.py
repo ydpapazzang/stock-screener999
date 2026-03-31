@@ -1,4 +1,4 @@
-# VERSION: 1.0.2 (Fundamental Support)
+# VERSION: 1.0.3 (Cleanup & Fix)
 import FinanceDataReader as fdr
 import pandas as pd
 import numpy as np
@@ -58,7 +58,7 @@ def get_processed_data(symbol, period='M'):
         df_res['ma5'] = df_res['Close'].rolling(5).mean()
         df_res['ma20'] = df_res['Close'].rolling(20).mean()
         df_res['ma60'] = df_res['Close'].rolling(60).mean()
-        df_res['ma30'] = df_res['Close'].rolling(30).mean() # 와인스타인용
+        df_res['ma30'] = df_res['Close'].rolling(30).mean()
         df_res['vol_ma5'] = df_res['Volume'].rolling(5).mean()
         
         delta = df_res['Close'].diff()
@@ -90,109 +90,72 @@ def check_multi_signals(df, strategy_list):
         elif strategy == "외인/기관 쌍끌이 매수":
             cond = (df['Close'] > df['Close'].shift(1)) & (df['Volume'] > df['vol_ma5'] * 1.5)
         elif strategy == "꾸준한 배당주":
-            # 기술적 필터: 변동성 수축 및 바닥권 지지
             bb_w = (df['ma20'] - df['bb_lower']) / df['ma20']
             cond = (bb_w < 0.06) & (df['Close'] > df['ma60'] * 0.95)
         else:
-            # 주봉/월봉 기타 전략들 (생략된 경우 True로 처리하여 영향 없게 함)
             cond = pd.Series(True, index=df.index)
         final_cond &= cond
     return final_cond
 
 def get_fundamental_dividend(symbol):
-    """yfinance를 이용해 배당 및 재무 데이터 검증"""
     try:
-        # 한국 종목 코드 변환 (005930 -> 005930.KS)
         yf_sym = f"{symbol}.KS" if not symbol.isdigit() or int(symbol) < 900000 else f"{symbol}.KQ"
         ticker = yf.Ticker(yf_sym)
         info = ticker.info
-        
         div_yield = info.get('dividendYield', 0) or 0
         payout = info.get('payoutRatio', 0) or 0
-        
-        # 1. 배당수익률 3% 이상 (0.03)
-        # 2. 배당성향 30% 이상 (0.3)
-        if div_yield < 0.03 or payout < 0.3:
-            return False, 0
-            
-        # 순이익 데이터 확인 (최근 3년 연속 증가)
+        if div_yield < 0.03 or payout < 0.3: return False, 0
         earnings = ticker.financials.loc['Net Income']
         if len(earnings) >= 3:
-            # earnings는 최신순이므로 역순으로 비교 (과거 < 최근)
             if earnings.iloc[0] > earnings.iloc[1] > earnings.iloc[2]:
                 return True, round(div_yield * 100, 1)
-        
         return False, 0
-    except:
-        return False, 0
+    except: return False, 0
 
 def process_stock_multi_worker(symbol, name, strategy_list, period_key):
     df_data = get_processed_data(symbol, period_key)
     if df_data is not None and len(df_data) >= 2:
-        # 1. 기술적 지표 체크
-        if not check_multi_signals(df_data, strategy_list).iloc[-1]:
-            return None
-            
-        # 2. '꾸준한 배당주' 전략 포함 시 재무 체크
+        if not check_multi_signals(df_data, strategy_list).iloc[-1]: return None
         div_info = ""
         if "꾸준한 배당주" in strategy_list:
             is_good_div, yield_val = get_fundamental_dividend(symbol)
             if not is_good_div: return None
             div_info = f" (수익률: {yield_val}%)"
-            
-        # 3. 결과 요약
         curr = df_data.iloc[-1]
-        match_count = len(strategy_list) # 기술적 필터 통과한 경우
-        score = 100 # 기본 100점 (AND 필터 기준)
-        
         return {
-            "코드": symbol, "종목명": name + div_info, "점수": score, "현재가": f"{int(curr['Close']):,}",
+            "코드": symbol, "종목명": name + div_info, "점수": 100, "현재가": f"{int(curr['Close']):,}",
             "승률": "N/A", "평균수익": "N/A", "신규감지": "Y" if not check_multi_signals(df_data, strategy_list).iloc[-2] else "N",
             "일치전략": ", ".join(strategy_list)
         }
     return None
 
-def send_telegram_all(token, chat_id, results, strategy_names, target_type):
-    if not token or not chat_id or not results: return False
-    msg = f"🚀 *[전략 포착]* {target_type}\n🎯 전략: {', '.join(strategy_names)}\n📊 포착: {len(results)}개\n\n"
-    sorted_res = sorted(results, key=lambda x: x.get('점수', 0), reverse=True)
-    for i, item in enumerate(sorted_res[:10]):
-        msg += f"{i+1}. *{item['종목명']}*\n   - 현재가: {item['현재가']} | 신규: {item['신규감지']}\n"
-    msg += f"\n🔗 [스크리너 접속](https://stock-screener999-ztg2dqzbktgsfn5xxguc7t.streamlit.app/)"
-    requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": chat_id, "text": msg, "parse_mode": "Markdown"})
-    return True
-
 def get_dividend_details(symbol):
-    """배당 상세 정보 수집 (계산기용)"""
     try:
         yf_sym = f"{symbol}.KS" if symbol.isdigit() and int(symbol) < 900000 else (f"{symbol}.KQ" if symbol.isdigit() else symbol)
         ticker = yf.Ticker(yf_sym)
         info = ticker.info
-        
         dps = info.get('trailingAnnualDividendRate', 0) or info.get('dividendRate', 0) or 0
         div_yield = info.get('dividendYield', 0) or 0
         payout = info.get('payoutRatio', 0) or 0
-        
-        # 배당 주기 및 월 예측 (최근 배당 내역 기반)
         history = ticker.dividends
         months = []
         if not history.empty:
-            recent = history.tail(4)
-            months = sorted(list(set(recent.index.month)))
-        
-        # 5년 배당 성장률
-        growth = info.get('dividendGrowthRate', 0) or 0
-        
+            months = sorted(list(set(history.tail(4).index.month)))
         return {
-            "name": info.get('shortName', symbol),
-            "dps": dps,
-            "yield": round(div_yield * 100, 2),
-            "payout": round(payout * 100, 1),
-            "months": months,
-            "growth": round(growth * 100, 1),
+            "name": info.get('shortName', symbol), "dps": dps, "yield": round(div_yield * 100, 2),
+            "payout": round(payout * 100, 1), "months": months, "growth": round(info.get('dividendGrowthRate', 0)*100, 1),
             "currency": info.get('currency', 'KRW')
         }
     except: return None
+
+def send_telegram_all(token, chat_id, results, strategy_names, target_type):
+    if not token or not chat_id or not results: return False
+    msg = f"🚀 *[전략 포착]* {target_type}\n🎯 전략: {', '.join(strategy_names)}\n📊 포착: {len(results)}개\n\n"
+    for i, item in enumerate(results[:10]):
+        msg += f"{i+1}. *{item['종목명']}*\n   - 현재가: {item['현재가']} | 신규: {item['신규감지']}\n"
+    msg += f"\n🔗 [스크리너 접속](https://stock-screener999-ztg2dqzbktgsfn5xxguc7t.streamlit.app/)"
+    requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": chat_id, "text": msg, "parse_mode": "Markdown"})
+    return True
 
 def update_config_to_github(token, repo, content):
     if not token or not repo: return False
