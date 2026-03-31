@@ -3,14 +3,6 @@
     "tg_chat_id": "1782176235",
     "schedules": [
         {
-            "id": "4cb0ee6f",
-            "freq": "매일",
-            "time": "13:00",
-            "strategy": "정석 정배열 (추세추종)",
-            "target": "주식 (KOSPI 200)",
-            "limit": 100
-        },
-        {
             "id": "c7728044",
             "freq": "매일",
             "time": "13:45",
