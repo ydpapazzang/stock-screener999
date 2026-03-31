@@ -1,15 +1,6 @@
 {
     "tg_token": "7974642934:AAF-hrHJ9yXGrWQwWAgEBvZ1qATqKul9ayA",
     "tg_chat_id": "1782176235",
-    "schedules": [
-        {
-            "id": "24c76bb7",
-            "freq": "매일",
-            "time": "13:00",
-            "strategy": "정석 정배열 (추세추종)",
-            "target": "주식 (KOSPI 200)",
-            "limit": 100
-        }
-    ],
+    "schedules": [],
     "password": "6666"
 }
