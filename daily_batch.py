@@ -30,6 +30,11 @@ def run_batch():
     
     print(f"--- 배치 스캔 시작 (KST: {now_kst.strftime('%Y-%m-%d %H:%M')}) ---")
 
+    # [수정] 수동 실행 여부 확인 (GitHub Actions에서 버튼 클릭 시 무조건 실행)
+    is_manual_run = os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+    if is_manual_run:
+        print("🔔 수동 실행 모드: 시간 체크를 무시하고 모든 알림을 발송합니다.")
+
     execution_logs = []
 
     for sched in schedules:
@@ -40,15 +45,18 @@ def run_batch():
         except:
             s_hour, s_min = 9, 0
         
-        # 15분 윈도우 체크
+        # 시간/분 일치 여부 체크 (수동 실행일 경우 무조건 True)
         time_match = (current_hour == s_hour) and (current_min >= s_min) and (current_min < s_min + 15)
         
-        should_run = time_match and (
-            (freq == "매일") or \
-            (freq == "매주 (월요일)" and is_monday) or \
-            (freq == "매월 (1일)" and is_first_day) or \
-            (freq == "매월 (말일)" and is_last_day)
-        )
+        if is_manual_run:
+            should_run = True
+        else:
+            should_run = time_match and (
+                (freq == "매일") or \
+                (freq == "매주 (월요일)" and is_monday) or \
+                (freq == "매월 (1일)" and is_first_day) or \
+                (freq == "매월 (말일)" and is_last_day)
+            )
         
         if should_run:
             print(f"실행 조건 충족: {sched['strategy']} ({sched_time})")
