@@ -39,19 +39,24 @@ def run_batch():
             df_list = logic.get_listing_data(target_key)
             
             results = []
-            targets = df_list.iloc[:int(sched.get('limit', 100))]
+            limit = int(sched.get('limit', 100))
+            targets = df_list.iloc[:limit]
             
-            for row in targets.itertuples():
-                period = 'M' if "월봉" in sched['strategy'] or "전배열" in sched['strategy'] or "눌림목" in sched['strategy'] else 'W'
-                df_data = logic.get_processed_data(row.Symbol, period)
-                if df_data is not None:
-                    signals = logic.check_all_signals(df_data, sched['strategy'])
-                    if signals.iloc[-1]:
-                        win, ret, cnt = logic.fast_backtest(df_data, sched['strategy'], period)
-                        results.append({"코드": row.Symbol, "종목명": row.Name, "승률": win, "평균수익": f"{ret}%"})
+            # 전략에 따른 주기 설정 (월봉/주봉)
+            m_strats = ["정석 정배열 (추세추종)", "20월선 눌림목 (조정매수)", "거래량 폭발 (세력개입)", "대시세 초입 (20선 돌파)", "월봉 MA12 돌파"]
+            period_key = 'M' if sched['strategy'] in m_strats else 'W'
+            
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                futures = {executor.submit(logic.process_stock_multi_worker, row.Symbol, row.Name, [sched['strategy']], period_key): row for row in targets.itertuples()}
+                for future in as_completed(futures):
+                    res = future.result()
+                    if res:
+                        results.append(res)
             
             if results:
-                msg = logic.format_tg_message(results, sched['strategy'], sched['target'])
+                msg = logic.format_tg_message(results, [sched['strategy']], sched['target'])
                 logic.send_telegram_message(token, chat_id, msg)
                 print(f"완료: {len(results)}개 종목 전송됨")
 

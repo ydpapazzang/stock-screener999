@@ -17,7 +17,7 @@ def run_automated_scan(sched_data):
     
     print(f"[{datetime.now()}] 알람 실행 중: {sched_data['freq']} {sched_data['time']} - {strategy} ({target})")
     
-    target_key = "KRX" if "주식" in target else "ETF"
+    target_key = "KOSPI" if "주식" in target else "ETF"
     df_list = logic.get_listing_data(target_key)
     
     if df_list.empty:
@@ -27,14 +27,21 @@ def run_automated_scan(sched_data):
     results = []
     targets = df_list.iloc[:limit]
     
-    for i, row in enumerate(targets.itertuples()):
-        df_m = logic.get_monthly_data(row.Symbol)
-        match, ind = logic.check_strategy(df_m, strategy)
-        if match:
-            results.append({"코드": row.Symbol, "종목명": row.Name, **ind})
+    # 전략에 따른 주기 설정 (월봉/주봉)
+    m_strats = ["정석 정배열 (추세추종)", "20월선 눌림목 (조정매수)", "거래량 폭발 (세력개입)", "대시세 초입 (20선 돌파)", "월봉 MA12 돌파"]
+    period_key = 'M' if strategy in m_strats else 'W'
+    
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {executor.submit(logic.process_stock_multi_worker, row.Symbol, row.Name, [strategy], period_key): row for row in targets.itertuples()}
+        for future in as_completed(futures):
+            res = future.result()
+            if res:
+                results.append(res)
             
     if results:
-        msg = logic.format_tg_message(results, strategy, target)
+        msg = logic.format_tg_message(results, [strategy], target)
         if logic.send_telegram_message(token, chat_id, msg):
             print(f"[{strategy}] 성공: {len(results)}개 종목 발송 완료")
         else:
