@@ -27,5 +27,14 @@
             "limit": 100
         }
     ],
-    "password": "6666"
+    "password": "6666",
+    "history": [
+        {
+            "time": "2026-03-31 12:51",
+            "strategy": "정석 정배열 (추세추종) (수동)",
+            "target": "주식 (KOSPI 200)",
+            "count": 39,
+            "status": "Success"
+        }
+    ]
 }
