@@ -183,12 +183,17 @@ with tab2:
     for idx, sched in enumerate(schedules):
         with st.container(border=True):
             col1, col2 = st.columns([4, 1])
+            # 대상(Target) 정보를 포함하여 표시
+            target_info = sched.get('target', '정보 없음')
             col1.markdown(f"### 📡 {sched['freq']} {sched['time']} | {sched['strategy']}")
+            col1.caption(f"🎯 대상: {target_info} | 스캔 제한: {sched.get('limit', 100)}개")
+            
             if col2.button("🗑️ 삭제", key=f"del_{sched['id']}"):
-                config['schedules'].pop(idx)
-                logic.save_config(config)
-                # 자동 동기화 실행
-                auto_sync_github()
+                with st.spinner("저장소 동기화 중..."):
+                    config['schedules'].pop(idx)
+                    logic.save_config(config)
+                    # 자동 동기화 실행
+                    auto_sync_github()
                 st.rerun()
 
 with tab3:
