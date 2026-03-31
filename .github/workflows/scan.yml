@@ -2,7 +2,7 @@ name: Daily Stock Scan
 
 on:
   schedule:
-    - cron: '0 * * * *' # 매 정시마다 실행 (KST 기준도 매 정시)
+    - cron: '0,15,30,45 * * * *' # 15분 단위 실행
   workflow_dispatch:
 
 jobs:

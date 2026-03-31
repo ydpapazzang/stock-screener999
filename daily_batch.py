@@ -26,6 +26,7 @@ def run_batch():
     is_monday = now_kst.weekday() == 0
     is_first_day = now_kst.day == 1
     current_hour = now_kst.hour
+    current_min = now_kst.minute
     
     print(f"--- 배치 스캔 시작 (KST: {now_kst.strftime('%Y-%m-%d %H:%M')}) ---")
 
@@ -37,8 +38,12 @@ def run_batch():
         except:
             s_hour, s_min = 9, 0
         
-        # 시간 일치 여부 체크
-        time_match = (current_hour == s_hour)
+        # 시간/분 일치 여부 체크 (15분 단위 실행이므로, 해당 구간 내에 있는지 확인)
+        # 예: 13:45 스케줄은 13:45 ~ 13:59 사이에 실행되면 발송
+        time_match = (current_hour == s_hour) and (current_min >= s_min) and (current_min < s_min + 15)
+        
+        if time_match:
+            print(f"매칭 확인: {sched_time} 스케줄을 현재 시간({current_hour}:{current_min})에 실행합니다.")
         
         should_run = time_match and (
             (freq == "매일") or \
