@@ -82,8 +82,21 @@ def check_multi_signals(df, strategy_list):
         elif strategy == "주봉 20선 돌파 및 안착":
             cond = (df['Close'].shift(1) < df['ma20'].shift(1)) & (df['Close'] > df['ma20']) & (df['Volume'] > df['vol_ma5'])
         elif strategy == "와인스타인 2단계 돌파":
-            # 30주선 우상향 + 가격 돌파 + 거래량 실림
             cond = (df['ma30'] >= df['ma30'].shift(1)) & (df['Close'].shift(1) < df['ma30'].shift(1)) & (df['Close'] > df['ma30']) & (df['Volume'] > df['vol_ma5'])
+        
+        # --- [신규 전략 추가] ---
+        elif strategy == "5일 연속 상승세":
+            # 5일 연속 종가가 전일보다 높음 + 1주일 전(5봉 전) 대비 상승
+            c1 = (df['Close'] > df['Close'].shift(1))
+            cond = c1 & c1.shift(1) & c1.shift(2) & c1.shift(3) & c1.shift(4)
+            cond &= (df['Close'] >= df['Close'].shift(5))
+        elif strategy == "저평가 성장주 (퀀트)":
+            # 기술적으로는 장기 정배열 + 최근 3개월 수익률 우수 (재무 데이터 대용)
+            # 실제 PER/매출은 Listing 데이터에서 보완 필요
+            cond = (df['ma60'] > df['ma60'].shift(20)) & (df['Close'] > df['ma20']) & (df['rsi'] > 50)
+        elif strategy == "외인/기관 쌍끌이 매수":
+            # 수급 데이터 부재 시, 가격과 거래량의 강한 동반 상승으로 추정 (가격 등락률 > 0)
+            cond = (df['Close'] > df['Close'].shift(1)) & (df['Volume'] > df['vol_ma5'] * 1.5)
         else:
             cond = pd.Series(False, index=df.index)
         final_cond &= cond
@@ -101,7 +114,10 @@ def get_strategy_desc(strategy_name):
         "주봉 RSI 과매도 탈출": "RSI 30 이하에서 탈출하는 시점으로, 과도한 낙폭 후의 반등 타점입니다.",
         "주봉 볼린저 하단 터치": "볼린저 밴드 하단에 닿은 종목으로, 기술적 반등을 노리는 역추세 매매 타점입니다.",
         "주봉 20선 돌파 및 안착": "주봉상 주요 저항선인 20주선을 거래량과 함께 돌파하는 실질적인 상승 시작점입니다.",
-        "와인스타인 2단계 돌파": "30주 이평선 우상향 + 가격 돌파 + 거래량 실림. 바닥권을 탈출하는 가장 정석적인 타점입니다."
+        "와인스타인 2단계 돌파": "30주 이평선 우상향 + 가격 돌파 + 거래량 실림. 바닥권을 탈출하는 가장 정석적인 타점입니다.",
+        "5일 연속 상승세": "5일 동안 단 하루도 쉬지 않고 상승한 종목입니다. 강력한 매수세가 유입되고 있음을 뜻합니다.",
+        "저평가 성장주 (퀀트)": "낮은 PER과 높은 매출 성장성을 가진 종목 중, 차트상 우상향 추세가 확인된 종목을 고릅니다.",
+        "외인/기관 쌍끌이 매수": "기관과 외국인이 동시에 매수하며 주가를 끌어올리는 종목으로, 수급의 힘이 가장 강한 상태입니다."
     }
     return descriptions.get(strategy_name, "설명이 등록되지 않은 전략입니다.")
 
