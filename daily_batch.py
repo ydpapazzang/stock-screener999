@@ -2,29 +2,35 @@ import logic
 import os
 import pandas as pd
 from datetime import datetime, timedelta
+import calendar
 
 def run_batch():
-    # GitHub Secrets에서 정보 가져오기
-    token = os.environ.get("TELEGRAM_TOKEN")
-    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
-    
-    if not token or not chat_id:
-        print(f"Error: 환경 변수(Secrets) 설정이 필요합니다. (TOKEN: {'OK' if token else 'MISSING'}, ID: {'OK' if chat_id else 'MISSING'})")
-        return
-
+    # 1. 설정 로드
     config = logic.load_config()
     schedules = config.get("schedules", [])
     
+    # 2. 텔레그램 정보 가져오기 (설정 파일 우선, 없으면 환경 변수)
+    token = config.get("tg_token") or os.environ.get("TELEGRAM_TOKEN")
+    chat_id = config.get("tg_chat_id") or os.environ.get("TELEGRAM_CHAT_ID")
+    
+    if not token or not chat_id:
+        print("Error: 텔레그램 설정이 없습니다. 웹 UI에서 텔레그램 봇 토큰과 Chat ID를 저장하고 동기화해주세요.")
+        return
+
     if not schedules:
         print("등록된 스케줄이 없습니다.")
         return
 
-    # 한국 시간 기준 현재 시간 구하기
+    # 3. 현재 시간(KST) 및 날짜 정보 계산
     now_utc = datetime.utcnow()
     now_kst = now_utc + timedelta(hours=9)
     
     is_monday = now_kst.weekday() == 0
     is_first_day = now_kst.day == 1
+    # 말일 계산
+    last_day = calendar.monthrange(now_kst.year, now_kst.month)[1]
+    is_last_day = now_kst.day == last_day
+    
     current_hour = now_kst.hour
     current_min = now_kst.minute
     
@@ -38,17 +44,14 @@ def run_batch():
         except:
             s_hour, s_min = 9, 0
         
-        # 시간/분 일치 여부 체크 (15분 단위 실행이므로, 해당 구간 내에 있는지 확인)
-        # 예: 13:45 스케줄은 13:45 ~ 13:59 사이에 실행되면 발송
+        # 시간/분 일치 여부 체크 (GitHub Actions 실행 지연 고려하여 15분 윈도우 적용)
         time_match = (current_hour == s_hour) and (current_min >= s_min) and (current_min < s_min + 15)
-        
-        if time_match:
-            print(f"매칭 확인: {sched_time} 스케줄을 현재 시간({current_hour}:{current_min})에 실행합니다.")
         
         should_run = time_match and (
             (freq == "매일") or \
             (freq == "매주 (월요일)" and is_monday) or \
-            (freq == "매월 (1일)" and is_first_day)
+            (freq == "매월 (1일)" and is_first_day) or \
+            (freq == "매월 (말일)" and is_last_day)
         )
         
         if should_run:
@@ -92,7 +95,7 @@ def run_batch():
                 logic.send_telegram_message(token, chat_id, msg)
                 print("결과 없음: 알림 전송 완료")
         else:
-            print(f"건너뜀: {sched['strategy']} ({sched_time}) - 현재 시간과 일치하지 않음")
+            print(f"건너뜀: {sched['strategy']} ({sched_time}) - 조건 미충족 (KST: {current_hour}:{current_min})")
 
 if __name__ == "__main__":
     run_batch()
