@@ -258,6 +258,8 @@ def format_tg_message(results, strategy_names, target_type):
     
     if len(results) > 10:
         msg += f"\n외 {len(results)-10}개 종목이 더 포착되었습니다."
+    
+    msg += f"\n\n🔗 *[프로 스크리너 접속]*\nhttps://stock-screener999-ztg2dqzbktgsfn5xxguc7t.streamlit.app/"
     return msg
 
 def send_telegram_message(token, chat_id, message):

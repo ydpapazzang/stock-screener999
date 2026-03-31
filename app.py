@@ -174,7 +174,21 @@ with tab2:
                             if r: res_list.append(r)
                     if config.get("tg_token") and config.get("tg_chat_id"):
                         msg_text = logic.format_tg_message(res_list, [sched['strategy']], sched['target']) if res_list else f"🔍 *[{sched['strategy']}]* 결과 없음"
+                        
+                        # 텍스트 메시지 먼저 발송
                         if logic.send_telegram_message(config["tg_token"], config["tg_chat_id"], msg_text): 
+                            # 차트 이미지 발송 (결과가 있을 때만)
+                            if res_list:
+                                sorted_res = sorted(res_list, key=lambda x: x.get('승률', 0), reverse=True)
+                                for item in sorted_res[:3]:
+                                    df_c = logic.get_processed_data(item['코드'], p_key)
+                                    if df_c is not None:
+                                        fname = f"test_{item['코드']}.png"
+                                        if logic.save_chart_image(df_c, item['종목명'], fname):
+                                            logic.send_telegram_photo(config["tg_token"], config["tg_chat_id"], fname, caption=f"📊 *{item['종목명']}* 분석 차트 (수동테스트)")
+                                            import os
+                                            if os.path.exists(fname): os.remove(fname)
+
                             st.success("발송 성공!")
                             # 실행 이력 추가 (수동 발송 기록)
                             log_entry = {
