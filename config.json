@@ -9,6 +9,14 @@
             "strategy": "20월선 눌림목 (조정매수)",
             "target": "주식 (KOSPI 200)",
             "limit": 100
+        },
+        {
+            "id": "0edd6246",
+            "freq": "매일",
+            "time": "11:00",
+            "strategy": "정석 정배열 (추세추종)",
+            "target": "주식 (KOSPI 200)",
+            "limit": 100
         }
     ],
     "password": "6666"
