@@ -1,7 +1,16 @@
 {
     "tg_token": "7974642934:AAF-hrHJ9yXGrWQwWAgEBvZ1qATqKul9ayA",
     "tg_chat_id": "1782176235",
-    "schedules": [],
+    "schedules": [
+        {
+            "id": "38a0f340",
+            "freq": "매일",
+            "time": "06:00",
+            "strategy": "거래량 폭발 (세력개입)",
+            "target": "주식 (KOSPI 200)",
+            "limit": 100
+        }
+    ],
     "password": "6666",
     "history": [
         {
