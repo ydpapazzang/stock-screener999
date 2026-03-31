@@ -30,6 +30,13 @@
     "password": "6666",
     "history": [
         {
+            "time": "2026-03-31 13:01",
+            "strategy": "거래량 폭발 (세력개입) (수동)",
+            "target": "주식 (KOSPI 200)",
+            "count": 2,
+            "status": "Success"
+        },
+        {
             "time": "2026-03-31 12:53",
             "strategy": "거래량 폭발 (세력개입) (수동)",
             "target": "주식 (KOSPI 200)",
