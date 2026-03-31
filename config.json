@@ -33,6 +33,14 @@
             "strategy": "정석 정배열 (추세추종)",
             "target": "ETF",
             "limit": 100
+        },
+        {
+            "id": "1b113a29",
+            "freq": "매일",
+            "time": "09:30",
+            "strategy": "정석 정배열 (추세추종)",
+            "target": "ETF",
+            "limit": 100
         }
     ],
     "password": "6666"
