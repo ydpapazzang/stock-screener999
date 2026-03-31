@@ -242,6 +242,24 @@ def process_stock_multi_worker(symbol, name, strategy_list, period_key):
             return {"코드": symbol, "종목명": name, "현재가": f"{int(curr['Close']):,}", "승률": win, "평균수익": f"{ret}%", "신호수": cnt, "신규감지": is_new, "이격도": f"{disp:+.1f}%"}
     return None
 
+def format_tg_message(results, strategy_names, target_type):
+    """텔레그램용 메시지 형식 생성"""
+    now_str = datetime.now().strftime('%Y-%m-%d %H:%M')
+    msg = f"🚀 *[전략 포착]* 스캔 결과\n"
+    msg += f"🎯 전략: {', '.join(strategy_names)}\n"
+    msg += f"📊 포착: {len(results)}개 | {target_type}\n\n"
+    
+    # 승률 높은 순으로 정렬
+    sorted_res = sorted(results, key=lambda x: x.get('승률', 0), reverse=True)
+    for i, item in enumerate(sorted_res[:10]):
+        msg += f"{i+1}. *{item['종목명']}* ({item['코드']})\n"
+        msg += f"   - 현재가: {item['현재가']} | 승률: {item['승률']}%\n"
+        msg += f"   - 신규감지: {item['신규감지']} | 이격도: {item['이격도']}\n"
+    
+    if len(results) > 10:
+        msg += f"\n외 {len(results)-10}개 종목이 더 포착되었습니다."
+    return msg
+
 def send_telegram_message(token, chat_id, message):
     if not token or not chat_id: return False
     url = f"https://api.telegram.org/bot{token}/sendMessage"
