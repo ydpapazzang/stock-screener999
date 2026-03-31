@@ -19,11 +19,19 @@
             "limit": 200
         },
         {
-            "id": "743c0e08",
+            "id": "2243e9ab",
             "freq": "매일",
-            "time": "08:30",
+            "time": "09:15",
             "strategy": "정석 정배열 (추세추종)",
-            "target": "주식 (KOSPI 200)",
+            "target": "ETF",
+            "limit": 100
+        },
+        {
+            "id": "0ffbd641",
+            "freq": "매일",
+            "time": "09:30",
+            "strategy": "정석 정배열 (추세추종)",
+            "target": "ETF",
             "limit": 100
         }
     ],
