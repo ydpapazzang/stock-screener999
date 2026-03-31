@@ -9,6 +9,14 @@
             "strategy": "월봉 MA12 돌파",
             "target": "주식 (KOSPI 200)",
             "limit": 100
+        },
+        {
+            "id": "14ad11ca",
+            "freq": "매일",
+            "time": "10:15",
+            "strategy": "정석 정배열 (추세추종)",
+            "target": "ETF",
+            "limit": 100
         }
     ],
     "password": "6666"
