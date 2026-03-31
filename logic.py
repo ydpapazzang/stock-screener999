@@ -268,6 +268,40 @@ def send_telegram_message(token, chat_id, message):
         return res.status_code == 200
     except: return False
 
+def save_chart_image(df, name, filename="chart.png"):
+    """상위 종목의 요약 차트를 이미지로 저장"""
+    try:
+        import matplotlib.pyplot as plt
+        plt.style.use('dark_background')
+        df_plot = df.tail(40)
+        
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(df_plot.index, df_plot['Close'], color='orange', label='Price', linewidth=2)
+        ax.plot(df_plot.index, df_plot['ma20'], color='red', label='MA20', alpha=0.7)
+        ax.plot(df_plot.index, df_plot['ma60'], color='purple', label='MA60', alpha=0.7)
+        
+        ax.set_title(f"{name} Analysis", fontsize=15)
+        ax.grid(True, alpha=0.2)
+        ax.legend()
+        
+        plt.tight_layout()
+        plt.savefig(filename)
+        plt.close()
+        return True
+    except Exception as e:
+        print(f"이미지 저장 실패: {e}")
+        return False
+
+def send_telegram_photo(token, chat_id, photo_path, caption=""):
+    """텔레그램으로 사진 전송"""
+    if not token or not chat_id: return False
+    url = f"https://api.telegram.org/bot{token}/sendPhoto"
+    try:
+        with open(photo_path, 'rb') as f:
+            res = requests.post(url, data={"chat_id": chat_id, "caption": caption, "parse_mode": "Markdown"}, files={"photo": f}, timeout=15)
+        return res.status_code == 200
+    except: return False
+
 def update_config_to_github(token, repo, path, message, content):
     """GitHub API를 통해 파일을 직접 커밋/푸시"""
     url = f"https://api.github.com/repos/{repo}/contents/{path}"

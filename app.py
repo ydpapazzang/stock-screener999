@@ -195,6 +195,17 @@ with tab3:
     if gh_token_input != st.session_state["gh_token"] or gh_repo_input != st.session_state["gh_repo"]:
         st.session_state["gh_token"] = gh_token_input; st.session_state["gh_repo"] = gh_repo_input
     if st.button("🚀 GitHub 강제 동기화"): auto_sync_github()
+    
+    st.divider()
+    st.subheader("📜 최근 자동 알림 실행 이력")
+    history = config.get("history", [])
+    if history:
+        df_hist = pd.DataFrame(history)
+        df_hist.columns = ["실행 시간", "전략", "대상", "포착수", "상태"]
+        st.table(df_hist)
+    else:
+        st.write("실행 기록이 없습니다.")
+
     st.divider()
     current_pw = st.text_input("현재 비번", type="password")
     new_pw = st.text_input("새 비번", type="password")

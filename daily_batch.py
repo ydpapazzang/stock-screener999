@@ -3,31 +3,25 @@ import os
 import pandas as pd
 from datetime import datetime, timedelta
 import calendar
+import json
 
 def run_batch():
     # 1. 설정 로드
     config = logic.load_config()
     schedules = config.get("schedules", [])
     
-    # 2. 텔레그램 정보 가져오기 (설정 파일 우선, 없으면 환경 변수)
     token = config.get("tg_token") or os.environ.get("TELEGRAM_TOKEN")
     chat_id = config.get("tg_chat_id") or os.environ.get("TELEGRAM_CHAT_ID")
     
     if not token or not chat_id:
-        print("Error: 텔레그램 설정이 없습니다. 웹 UI에서 텔레그램 봇 토큰과 Chat ID를 저장하고 동기화해주세요.")
+        print("Error: 텔레그램 설정이 없습니다.")
         return
 
-    if not schedules:
-        print("등록된 스케줄이 없습니다.")
-        return
-
-    # 3. 현재 시간(KST) 및 날짜 정보 계산
+    # 3. 현재 시간(KST) 정보
     now_utc = datetime.utcnow()
     now_kst = now_utc + timedelta(hours=9)
-    
     is_monday = now_kst.weekday() == 0
     is_first_day = now_kst.day == 1
-    # 말일 계산
     last_day = calendar.monthrange(now_kst.year, now_kst.month)[1]
     is_last_day = now_kst.day == last_day
     
@@ -35,6 +29,8 @@ def run_batch():
     current_min = now_kst.minute
     
     print(f"--- 배치 스캔 시작 (KST: {now_kst.strftime('%Y-%m-%d %H:%M')}) ---")
+
+    execution_logs = []
 
     for sched in schedules:
         freq = sched.get("freq")
@@ -44,7 +40,7 @@ def run_batch():
         except:
             s_hour, s_min = 9, 0
         
-        # 시간/분 일치 여부 체크 (GitHub Actions 실행 지연 고려하여 15분 윈도우 적용)
+        # 15분 윈도우 체크
         time_match = (current_hour == s_hour) and (current_min >= s_min) and (current_min < s_min + 15)
         
         should_run = time_match and (
@@ -59,43 +55,63 @@ def run_batch():
             target_key = "KOSPI" if "주식" in sched['target'] else "ETF"
             df_list = logic.get_listing_data(target_key)
             
-            if df_list.empty:
-                print("에러: 종목 리스트를 불러오지 못했습니다.")
-                continue
-
             results = []
             limit = int(sched.get('limit', 100))
             targets = df_list.iloc[:limit]
             
-            # 전략에 따른 주기 설정
             m_strats = ["정석 정배열 (추세추종)", "20월선 눌림목 (조정매수)", "거래량 폭발 (세력개입)", "대시세 초입 (20선 돌파)", "월봉 MA12 돌파", "저평가 성장주 (퀀트)"]
             d_strats = ["5일 연속 상승세", "외인/기관 쌍끌이 매수"]
             
-            if sched['strategy'] in m_strats: period_key = 'M'
-            elif sched['strategy'] in d_strats: period_key = 'D'
-            else: period_key = 'W'
+            p_key = 'M' if sched['strategy'] in m_strats else ('D' if sched['strategy'] in d_strats else 'W')
             
             from concurrent.futures import ThreadPoolExecutor, as_completed
-            
             with ThreadPoolExecutor(max_workers=10) as executor:
-                futures = {executor.submit(logic.process_stock_multi_worker, row.Symbol, row.Name, [sched['strategy']], period_key): row for row in targets.itertuples()}
+                futures = {executor.submit(logic.process_stock_multi_worker, row.Symbol, row.Name, [sched['strategy']], p_key): row for row in targets.itertuples()}
                 for future in as_completed(futures):
                     try:
                         res = future.result()
                         if res: results.append(res)
-                    except Exception as e:
-                        print(f"종목 분석 중 에러: {e}")
+                    except: pass
             
+            # 메시지 발송
             if results:
                 msg = logic.format_tg_message(results, [sched['strategy']], sched['target'])
                 logic.send_telegram_message(token, chat_id, msg)
-                print(f"성공: {len(results)}개 종목 전송됨")
+                
+                # 상위 3개 종목 차트 발송
+                sorted_res = sorted(results, key=lambda x: x.get('승률', 0), reverse=True)
+                for item in sorted_res[:3]:
+                    df_chart = logic.get_processed_data(item['코드'], p_key)
+                    if df_chart is not None:
+                        fname = f"{item['코드']}_chart.png"
+                        if logic.save_chart_image(df_chart, item['종목명'], fname):
+                            logic.send_telegram_photo(token, chat_id, fname, caption=f"📊 *{item['종목명']}* 분석 차트")
+                            if os.path.exists(fname): os.remove(fname)
             else:
                 msg = f"🔍 *[{sched['strategy']}]* 스캔 결과\n\n현재 조건에 만족하는 종목이 없습니다. ({sched['target']})"
                 logic.send_telegram_message(token, chat_id, msg)
-                print("결과 없음: 알림 전송 완료")
-        else:
-            print(f"건너뜀: {sched['strategy']} ({sched_time}) - 조건 미충족 (KST: {current_hour}:{current_min})")
+
+            # 로그 기록
+            log_entry = {
+                "time": now_kst.strftime("%Y-%m-%d %H:%M"),
+                "strategy": sched['strategy'],
+                "target": sched['target'],
+                "count": len(results),
+                "status": "Success"
+            }
+            execution_logs.append(log_entry)
+
+    # 4. 실행 이력을 config.json에 업데이트하여 GitHub로 푸시
+    if execution_logs:
+        if "history" not in config: config["history"] = []
+        config["history"] = (execution_logs + config["history"])[:10] # 최근 10개만 유지
+        logic.save_config(config)
+        
+        # GitHub API 동기화 (PAT 및 REPO 정보는 환경변수에서 가져옴)
+        gh_token = os.environ.get("GH_TOKEN")
+        gh_repo = os.environ.get("GH_REPO")
+        if gh_token and gh_repo:
+            logic.update_config_to_github(gh_token, gh_repo, "config.json", "Update execution history", json.dumps(config, ensure_ascii=False, indent=4))
 
 if __name__ == "__main__":
     run_batch()
