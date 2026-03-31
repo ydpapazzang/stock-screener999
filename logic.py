@@ -29,13 +29,22 @@ def save_config(config_data):
 # --- [1] 데이터 및 지표 계산 ---
 def get_processed_data(symbol, period='M'):
     try:
-        days = 365*10 if period == 'M' else 365*5
+        # 기간 설정: 월봉(10년), 주봉(5년), 일봉(1년)
+        if period == 'M': days = 365*10
+        elif period == 'W': days = 365*5
+        else: days = 365*1 # 일봉
+        
         start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
         df = fdr.DataReader(symbol, start_date)
         if df is None or len(df) < 70: return None
         
-        rule = 'ME' if period == 'M' else 'W'
-        df_res = df.resample(rule).agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'})
+        # 리샘플링 규칙: ME(월말), W(주봉), D(일봉 - 리샘플링 불필요)
+        if period == 'M': 
+            df_res = df.resample('ME').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'})
+        elif period == 'W':
+            df_res = df.resample('W').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'})
+        else:
+            df_res = df # 일봉은 그대로 사용
         
         # 지표 계산
         df_res['ma5'] = df_res['Close'].rolling(5).mean()

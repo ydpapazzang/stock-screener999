@@ -76,14 +76,17 @@ with tab1:
     
     with st.sidebar:
         st.header("🎯 전략 조합 설정 (AND 필터)")
-        category = st.selectbox("분석 단위", ["월봉 전략 조합", "주봉 전략 조합"])
+        category = st.selectbox("분석 단위", ["월봉 전략 조합", "주봉 전략 조합", "일봉 전략 조합"])
         
         if "월봉" in category:
             all_strats = ["정석 정배열 (추세추종)", "20월선 눌림목 (조정매수)", "거래량 폭발 (세력개입)", "대시세 초입 (20선 돌파)", "월봉 MA12 돌파", "저평가 성장주 (퀀트)"]
             period_key = 'M'
-        else:
-            all_strats = ["주봉 5/20 골든크로스", "주봉 RSI 과매도 탈출", "주봉 볼린저 하단 터치", "주봉 20선 돌파 및 안착", "와인스타인 2단계 돌파", "5일 연속 상승세", "외인/기관 쌍끌이 매수"]
+        elif "주봉" in category:
+            all_strats = ["주봉 5/20 골든크로스", "주봉 RSI 과매도 탈출", "주봉 볼린저 하단 터치", "주봉 20선 돌파 및 안착", "와인스타인 2단계 돌파"]
             period_key = 'W'
+        else: # 일봉
+            all_strats = ["5일 연속 상승세", "외인/기관 쌍끌이 매수"]
+            period_key = 'D'
             
         selected_strategies = st.multiselect("사용할 전략들을 선택하세요 (모두 만족 시 포착)", all_strats, default=[all_strats[0]])
         
