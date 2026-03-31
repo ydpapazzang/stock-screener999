@@ -3,14 +3,6 @@
     "tg_chat_id": "1782176235",
     "schedules": [
         {
-            "id": "51db2d6a",
-            "freq": "매일",
-            "time": "14:00",
-            "strategy": "정석 정배열 (추세추종)",
-            "target": "주식 (KOSPI 200)",
-            "limit": 100
-        },
-        {
             "id": "6e581549",
             "freq": "매일",
             "time": "14:15",
@@ -25,7 +17,31 @@
             "strategy": "정석 정배열 (추세추종)",
             "target": "주식 (KOSPI 200)",
             "limit": 100
+        },
+        {
+            "id": "06a16879",
+            "freq": "매일",
+            "time": "15:00",
+            "strategy": "거래량 폭발 (세력개입)",
+            "target": "주식 (KOSPI 200)",
+            "limit": 100
         }
     ],
-    "password": "6666"
+    "password": "6666",
+    "history": [
+        {
+            "time": "2026-03-31 12:53",
+            "strategy": "거래량 폭발 (세력개입) (수동)",
+            "target": "주식 (KOSPI 200)",
+            "count": 2,
+            "status": "Success"
+        },
+        {
+            "time": "2026-03-31 12:51",
+            "strategy": "정석 정배열 (추세추종) (수동)",
+            "target": "주식 (KOSPI 200)",
+            "count": 39,
+            "status": "Success"
+        }
+    ]
 }
