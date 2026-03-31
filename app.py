@@ -7,9 +7,17 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # --- [0] 세션 초기화 및 토큰 관리 ---
 if "gh_token" not in st.session_state:
-    st.session_state["gh_token"] = ""
+    # 1. Streamlit Secrets에서 먼저 로드 시도 (보안 및 편의성)
+    try:
+        st.session_state["gh_token"] = st.secrets.get("GH_TOKEN", "")
+    except:
+        st.session_state["gh_token"] = ""
+
 if "gh_repo" not in st.session_state:
-    st.session_state["gh_repo"] = "ydpapazzang/stock-screener999"
+    try:
+        st.session_state["gh_repo"] = st.secrets.get("GH_REPO", "ydpapazzang/stock-screener999")
+    except:
+        st.session_state["gh_repo"] = "ydpapazzang/stock-screener999"
 
 def auto_sync_github():
     """알람 변경 시 자동으로 GitHub에 동기화 시도"""
