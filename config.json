@@ -9,6 +9,14 @@
             "strategy": "정석 정배열 (추세추종)",
             "target": "주식 (KOSPI 200)",
             "limit": 100
+        },
+        {
+            "id": "9471a0d2",
+            "freq": "매일",
+            "time": "13:45",
+            "strategy": "정석 정배열 (추세추종)",
+            "target": "ETF",
+            "limit": 100
         }
     ],
     "password": "6666"
