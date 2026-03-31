@@ -17,6 +17,14 @@
             "strategy": "주봉 5/20 골든크로스",
             "target": "ETF",
             "limit": 100
+        },
+        {
+            "id": "6e8e15e3",
+            "freq": "매일",
+            "time": "14:45",
+            "strategy": "정석 정배열 (추세추종)",
+            "target": "주식 (KOSPI 200)",
+            "limit": 100
         }
     ],
     "password": "6666"
