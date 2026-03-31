@@ -3,14 +3,6 @@
     "tg_chat_id": "1782176235",
     "schedules": [
         {
-            "id": "6e581549",
-            "freq": "매일",
-            "time": "14:15",
-            "strategy": "주봉 5/20 골든크로스",
-            "target": "ETF",
-            "limit": 100
-        },
-        {
             "id": "6e8e15e3",
             "freq": "매일",
             "time": "14:45",
