@@ -19,22 +19,35 @@ def run_batch():
         print("등록된 스케줄이 없습니다.")
         return
 
-    # 오늘 요일 및 날짜 정보
-    now = datetime.now()
-    is_monday = now.weekday() == 0
-    is_first_day = now.day == 1
+    # 한국 시간 기준 현재 시간 구하기 (GitHub Actions는 UTC 기준이므로 +9시간)
+    from datetime import datetime, timedelta
+    now_utc = datetime.utcnow()
+    now_kst = now_utc + timedelta(hours=9)
     
-    print(f"--- 배치 스캔 시작 ({now}) ---")
+    is_monday = now_kst.weekday() == 0
+    is_first_day = now_kst.day == 1
+    current_hour = now_kst.hour
+    current_min = now_kst.minute
+    
+    print(f"--- 배치 스캔 시작 (KST: {now_kst.strftime('%Y-%m-%d %H:%M')}) ---")
 
     for sched in schedules:
         freq = sched.get("freq")
-        # 실행 조건 체크 (GitHub Actions가 매일 한 번 실행된다고 가정)
-        should_run = (freq == "매일") or \
-                     (freq == "매주 (월요일)" and is_monday) or \
-                     (freq == "매월 (1일)" and is_first_day)
+        sched_time = sched.get("time", "09:00")
+        s_hour, s_min = map(int, sched_time.split(":"))
+        
+        # 시간 일치 여부 체크 (현재 실행 시점과 스케줄 시간이 맞는지)
+        # GitHub Actions가 30분~1시간 단위로 실행된다고 가정할 때, 해당 시간대에 포함되는지 확인
+        time_match = (current_hour == s_hour)
+        
+        should_run = time_match and (
+            (freq == "매일") or \
+            (freq == "매주 (월요일)" and is_monday) or \
+            (freq == "매월 (1일)" and is_first_day)
+        )
         
         if should_run:
-            print(f"실행 중: {sched['strategy']} ({sched['target']})")
+            print(f"실행 조건 충족: {sched['strategy']} ({sched_time})")
             target_key = "KOSPI" if "주식" in sched['target'] else "ETF"
             df_list = logic.get_listing_data(target_key)
             

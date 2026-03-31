@@ -2,8 +2,8 @@ name: Daily Stock Scan
 
 on:
   schedule:
-    - cron: '0 0 * * *' # 매일 한국 시간 오전 9시 (UTC 0시)
-  workflow_dispatch: # 수동 실행 버튼 추가
+    - cron: '0 * * * *' # 매 정시마다 실행 (KST 기준도 매 정시)
+  workflow_dispatch:
 
 jobs:
   build:
