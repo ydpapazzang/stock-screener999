@@ -14,6 +14,16 @@ CONFIG_FILE = "config.json"
 DB_FILE = "stock_cache.db"
 
 # --- [0] 기본 유틸리티 ---
+def safe_cache(ttl=3600):
+    """Streamlit 환경에서만 캐시 적용, 아니면 그냥 함수 반환"""
+    def decorator(func):
+        try:
+            import streamlit as st
+            return st.cache_data(ttl=ttl)(func)
+        except:
+            return func
+    return decorator
+
 def load_config():
     if os.path.exists(CONFIG_FILE):
         try:
@@ -183,7 +193,7 @@ def create_advanced_chart(df, name, strategy_list):
     return fig
 
 # --- [4] 기타 및 병렬 처리 (Force Update 0331) ---
-@st.cache_data(ttl=3600)
+@safe_cache(ttl=3600)
 def get_listing_data(target):
     try:
         if target == "ETF":
