@@ -11,14 +11,6 @@
             "limit": 200
         },
         {
-            "id": "ad79d754",
-            "freq": "매월 (1일)",
-            "time": "09:00",
-            "strategy": "월봉 MA12 돌파",
-            "target": "ETF",
-            "limit": 200
-        },
-        {
             "id": "2243e9ab",
             "freq": "매일",
             "time": "09:15",
