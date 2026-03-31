@@ -3,22 +3,6 @@
     "tg_chat_id": "1782176235",
     "schedules": [
         {
-            "id": "aa6ad6d9",
-            "freq": "매월 (1일)",
-            "time": "09:00",
-            "strategy": "월봉 MA12 돌파",
-            "target": "주식 (KOSPI 200)",
-            "limit": 200
-        },
-        {
-            "id": "ad79d754",
-            "freq": "매월 (1일)",
-            "time": "09:00",
-            "strategy": "월봉 MA12 돌파",
-            "target": "ETF",
-            "limit": 200
-        },
-        {
             "id": "2243e9ab",
             "freq": "매일",
             "time": "09:15",
@@ -30,6 +14,14 @@
             "id": "0ffbd641",
             "freq": "매일",
             "time": "09:30",
+            "strategy": "정석 정배열 (추세추종)",
+            "target": "ETF",
+            "limit": 100
+        },
+        {
+            "id": "d88663db",
+            "freq": "매일",
+            "time": "09:15",
             "strategy": "정석 정배열 (추세추종)",
             "target": "ETF",
             "limit": 100
