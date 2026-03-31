@@ -5,6 +5,41 @@ import logic
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+# --- [0] 세션 초기화 및 토큰 관리 ---
+if "gh_token" not in st.session_state:
+    st.session_state["gh_token"] = ""
+if "gh_repo" not in st.session_state:
+    st.session_state["gh_repo"] = "ydpapazzang/stock-screener999"
+
+def auto_sync_github():
+    """알람 변경 시 자동으로 GitHub에 동기화 시도"""
+    token = st.session_state["gh_token"]
+    repo = st.session_state["gh_repo"]
+    
+    if not token or not repo:
+        st.warning("⚠️ 자동 동기화를 위해 [⚙️ 시스템 설정] 탭에서 GitHub 토큰을 먼저 입력해주세요.")
+        return False
+        
+    try:
+        import json
+        config_content = json.dumps(config, ensure_ascii=False, indent=4)
+        success = logic.update_config_to_github(
+            token=token.strip(),
+            repo=repo.strip(),
+            path="config.json",
+            message="Auto-sync schedules via Streamlit UI",
+            content=config_content
+        )
+        if success:
+            st.toast("✅ GitHub 자동 동기화 성공!", icon="🚀")
+            return True
+        else:
+            st.error("❌ 자동 동기화 실패. 토큰 권한을 확인하세요.")
+            return False
+    except Exception as e:
+        st.error(f"❌ 동기화 오류: {e}")
+        return False
+
 # --- [1] 기본 설정 ---
 st.set_page_config(page_title="Pro Strategic Screener", layout="wide", page_icon="⚡")
 config = logic.load_config()
@@ -130,7 +165,11 @@ with tab2:
             new_schedule = {"id": str(uuid.uuid4())[:8], "freq": new_freq, "time": new_time.strftime("%H:%M"), "strategy": new_strat, "target": new_target, "limit": 100}
             if 'schedules' not in config: config['schedules'] = []
             config['schedules'].append(new_schedule)
-            logic.save_config(config); st.success("등록됨!"); st.rerun()
+            logic.save_config(config)
+            st.success("등록됨!")
+            # 자동 동기화 실행
+            auto_sync_github()
+            st.rerun()
 
     schedules = config.get("schedules", [])
     for idx, sched in enumerate(schedules):
@@ -138,7 +177,11 @@ with tab2:
             col1, col2 = st.columns([4, 1])
             col1.markdown(f"### 📡 {sched['freq']} {sched['time']} | {sched['strategy']}")
             if col2.button("🗑️ 삭제", key=f"del_{sched['id']}"):
-                config['schedules'].pop(idx); logic.save_config(config); st.rerun()
+                config['schedules'].pop(idx)
+                logic.save_config(config)
+                # 자동 동기화 실행
+                auto_sync_github()
+                st.rerun()
 
 with tab3:
     st.title("⚙️ 시스템 설정")
@@ -146,36 +189,22 @@ with tab3:
     st.subheader("🔄 GitHub 동기화 (Cloud 전용)")
     st.info("웹에서 변경한 스케줄이 GitHub Actions에 반영되려면 GitHub API를 통해 동기화해야 합니다.")
     
-    gh_token = st.text_input("GitHub Personal Access Token (PAT)", type="password", help="repo 권한이 있는 토큰이 필요합니다.")
-    gh_repo = st.text_input("GitHub Repository", value="ydpapazzang/stock-screener999", help="계정명/저장소명 형식으로 입력하세요.")
+    # 세션 스테이트와 연동된 입력창
+    gh_token_input = st.text_input("GitHub Personal Access Token (PAT)", 
+                                   value=st.session_state["gh_token"],
+                                   type="password", 
+                                   help="repo 권한이 있는 토큰이 필요합니다.")
+    gh_repo_input = st.text_input("GitHub Repository", 
+                                  value=st.session_state["gh_repo"],
+                                  help="계정명/저장소명 형식으로 입력하세요.")
+    
+    # 세션 스테이트 업데이트를 위한 저장 버튼 (또는 입력 시 즉시 반영)
+    if gh_token_input != st.session_state["gh_token"] or gh_repo_input != st.session_state["gh_repo"]:
+        st.session_state["gh_token"] = gh_token_input
+        st.session_state["gh_repo"] = gh_repo_input
     
     if st.button("🚀 설정 파일을 GitHub에 동기화 (API Push)"):
-        # 앞뒤 공백 및 보이지 않는 특수문자 제거
-        clean_token = gh_token.strip()
-        clean_repo = gh_repo.strip()
-        
-        if not clean_token or not clean_repo:
-            st.error("❌ GitHub 토큰과 저장소 정보를 입력해주세요.")
-        else:
-            try:
-                # 현재 설정을 JSON 문자열로 변환
-                import json
-                config_content = json.dumps(config, ensure_ascii=False, indent=4)
-                
-                success = logic.update_config_to_github(
-                    token=clean_token,
-                    repo=clean_repo,
-                    path="config.json",
-                    message="Update schedules via Streamlit UI (API)",
-                    content=config_content
-                )
-                
-                if success:
-                    st.success("✅ GitHub API 동기화 성공! 이제 설정된 시간에 알림이 올 것입니다.")
-                else:
-                    st.error("❌ GitHub API 호출 실패. 토큰 권한이나 저장소 이름을 확인하세요.")
-            except Exception as e:
-                st.error(f"❌ 동기화 중 오류 발생: {e}")
+        auto_sync_github()
 
     st.divider()
     st.subheader("🔑 비밀번호 변경")
