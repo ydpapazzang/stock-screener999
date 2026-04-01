@@ -81,13 +81,13 @@ if not st.session_state["authenticated"]:
     st.stop()
 
 # --- [3] 메인 UI (내비게이션) ---
-# 관심종목 메뉴 제거됨
-menu = ["🚀 전략 스캔", "📅 알림 설정", "🛠️ 전략 커스텀", "💰 배당 계산기", "⚙️ 시스템"]
+menu = ["🚀 전략 스캔", "📅 알림 설정", "🛠️ 전략 커스텀", "⚙️ 시스템"]
 sel_menu = st.segmented_control("메뉴", menu, selection_mode="single", default=menu[st.session_state["active_tab_idx"]])
 if sel_menu: st.session_state["active_tab_idx"] = menu.index(sel_menu)
 curr_tab = menu[st.session_state["active_tab_idx"]]
 
 if curr_tab == "🚀 전략 스캔":
+    # ... (전략 스캔 로직)
     if 'last_results' in st.session_state:
         df = st.session_state['last_results']
         if not df.empty:
@@ -109,6 +109,7 @@ if curr_tab == "🚀 전략 스캔":
     else: st.info("사이드바에서 [즉시 스캔 실행] 버튼을 눌러주세요.")
 
 elif curr_tab == "📅 알림 설정":
+    # ... (알림 설정 로직)
     st.title("📅 자동 알림 스케줄")
     with st.expander("➕ 새 알림 추가"):
         f = st.selectbox("주기", ["매일", "매주 (월요일)", "매월 (1일)"])
@@ -147,6 +148,7 @@ elif curr_tab == "📅 알림 설정":
                 config['schedules'].pop(i); logic.save_config(config); logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4)); st.rerun()
 
 elif curr_tab == "🛠️ 전략 커스텀":
+    # ... (기존 전략 커스텀 로직 유지)
     st.title("🛠️ 나만의 전략 커스텀")
     if "custom_strategies" not in config: config["custom_strategies"] = []
     is_edit = st.session_state.editing_idx is not None
@@ -241,39 +243,8 @@ elif curr_tab == "🛠️ 전략 커스텀":
             if col2.button("📝 수정", key=f"edit_{i}"): st.session_state.editing_idx = i; st.session_state.temp_conditions = cs['conditions'].copy(); st.rerun()
             if col3.button("🗑️ 삭제", key=f"del_{i}"): config["custom_strategies"].pop(i); logic.save_config(config); st.rerun()
 
-elif curr_tab == "💰 배당 계산기":
-    st.title("💰 배당금 계산기")
-    if "portfolio" not in st.session_state: st.session_state.portfolio = []
-    with st.expander("➕ 보유 종목 추가", expanded=True):
-        c1,c2,c3 = st.columns(3)
-        if "s_list" not in st.session_state:
-            with st.spinner("로드 중..."): st.session_state.s_list = logic.get_searchable_list()
-        selected = c1.selectbox("종목 검색", st.session_state.s_list, index=None)
-        qty = c2.number_input("수량", min_value=1, value=10)
-        price = c3.number_input("평균단가", min_value=0.0, value=50000.0)
-        if st.button("추가") and selected:
-            sym = re.search(r'\((.*?)\)', selected).group(1)
-            det = logic.get_dividend_details(sym)
-            if det: det.update({"qty": qty, "avg_price": price}); st.session_state.portfolio.append(det); st.rerun()
-    if st.session_state.portfolio:
-        df_p = pd.DataFrame(st.session_state.portfolio)
-        invest = (df_p['qty'] * df_p['avg_price']).sum()
-        div = (df_p['qty'] * df_p['dps']).sum()
-        m1,m2,m3,m4 = st.columns(4)
-        m1.metric("총 투자", f"{invest:,.0f} {df_p['currency'].iloc[0]}")
-        m2.metric("연 배당", f"{div:,.0f} {df_p['currency'].iloc[0]}")
-        m3.metric("수익률", f"{(div/invest*100):.2f}%")
-        m4.metric("평균Payout", f"{df_p['payout'].mean():.1f}%" if 'payout' in df_p.columns else "N/A")
-        st.subheader("🗓️ 월별 배당 분포")
-        monthly = {m: 0 for m in range(1, 13)}
-        for p in st.session_state.portfolio:
-            if p['months']:
-                for m in p['months']: monthly[m] += (p['qty']*p['dps'])/len(p['months'])
-        df_m = pd.DataFrame({"Month":[f"{m}월" for m in range(1,13)], "Amount":list(monthly.values())})
-        st.plotly_chart(px.bar(df_m, x="Month", y="Amount", color="Amount", title="월별 배당금"), use_container_width=True)
-        if st.button("초기화"): st.session_state.portfolio = []; st.rerun()
-
 elif curr_tab == "⚙️ 시스템":
+    # ... (기존 시스템 로직 유지)
     st.title("⚙️ 시스템")
     if st.button("🚀 GitHub 강제 동기화"): 
         if logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4)): st.success("동기화 성공")
