@@ -131,45 +131,62 @@ with tabs[2]:
     st.title("🛠️ 나만의 전략 커스텀")
     
     if "custom_strategies" not in config: config["custom_strategies"] = []
+    if "temp_conditions" not in st.session_state: st.session_state.temp_conditions = []
     
     with st.expander("✨ 새 커스텀 전략 만들기", expanded=True):
-        c_name = st.text_input("전략명", placeholder="예: 나의 골든크로스")
+        c_name = st.text_input("전략명", placeholder="예: 골든크로스 + 정배열")
         c_unit = st.selectbox("캔들 단위", ["일봉", "주봉", "월봉"])
         
         st.write("---")
-        st.write("🎯 **조건 설정 (A >= B)**")
+        st.subheader("🎯 조건 구성 (모든 조건 만족 시 포착)")
         
-        # 조건 1
-        col1, col2, col3, col4 = st.columns([2, 2, 2, 3])
-        p1 = col1.selectbox("기간", [f"{i}봉전" for i in range(11)], key="p1")
-        a1 = col2.selectbox("비교 A", ["종가"] + [f"MA{i}" for i in range(1, 101)], key="a1")
-        op1 = col3.markdown("<div style='text-align: center; font-size: 24px; padding-top: 25px;'>≥</div>", unsafe_allow_html=True)
-        b1 = col4.selectbox("비교 B", [f"MA{i}" for i in range(1, 366)], index=19, key="b1") # 기본 MA20
+        # 조건 입력 창
+        col1, col2, col3, col4 = st.columns([2, 2, 1, 2])
+        p_val = col1.selectbox("기간", [f"{i}봉전" for i in range(11)])
+        a_val = col2.selectbox("비교 A", ["종가"] + [f"MA{i}" for i in range(1, 101)])
+        col3.markdown("<div style='text-align: center; font-size: 24px; padding-top: 25px;'>≥</div>", unsafe_allow_html=True)
+        b_val = col4.selectbox("비교 B", [f"MA{i}" for i in range(1, 366)], index=19)
         
-        if st.button("➕ 전략 저장"):
-            if not c_name: st.error("전략명을 입력하세요.")
-            else:
-                new_cs = {
-                    "name": c_name,
-                    "timeframe": c_unit,
-                    "conditions": [
-                        {"a": a1, "b": b1, "period": int(p1.replace("봉전", ""))}
-                    ]
-                }
-                config["custom_strategies"].append(new_cs)
-                logic.save_config(config)
-                logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4))
-                st.success(f"'{c_name}' 전략이 저장되었습니다!")
-                st.rerun()
+        if st.button("➕ 조건 추가", use_container_width=True):
+            new_cond = {"a": a_val, "b": b_val, "period": int(p_val.replace("봉전", ""))}
+            st.session_state.temp_conditions.append(new_cond)
+            st.toast("조건이 리스트에 추가되었습니다!")
+
+        # 현재 추가된 조건 리스트 표시
+        if st.session_state.temp_conditions:
+            st.write("📝 **현재 추가된 조건들:**")
+            for idx, cond in enumerate(st.session_state.temp_conditions):
+                c1, c2 = st.columns([5, 1])
+                c1.info(f"조건 {idx+1}: {cond['period']}봉전 {cond['a']} ≥ {cond['b']}")
+                if c2.button("❌", key=f"del_temp_{idx}"):
+                    st.session_state.temp_conditions.pop(idx)
+                    st.rerun()
+            
+            if st.button("💾 전체 전략 저장", type="primary", use_container_width=True):
+                if not c_name: st.error("전략명을 입력하세요.")
+                else:
+                    new_cs = {
+                        "name": c_name,
+                        "timeframe": c_unit,
+                        "conditions": st.session_state.temp_conditions.copy()
+                    }
+                    config["custom_strategies"].append(new_cs)
+                    logic.save_config(config)
+                    logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4))
+                    st.session_state.temp_conditions = [] # 초기화
+                    st.success(f"'{c_name}' 전략이 최종 저장되었습니다!")
+                    st.rerun()
+        else:
+            st.warning("최소 한 개 이상의 조건을 추가해야 전략 저장이 가능합니다.")
 
     st.write("---")
     st.subheader("📋 내 커스텀 전략 목록")
     for i, cs in enumerate(config.get("custom_strategies", [])):
         with st.container(border=True):
             col1, col2 = st.columns([5, 1])
-            cond_desc = " & ".join([f"{c['period']}봉전 {c['a']} ≥ {c['b']}" for c in cs['conditions']])
+            cond_desc = " AND ".join([f"[{c['period']}봉전 {c['a']} ≥ {c['b']}]" for c in cs['conditions']])
             col1.write(f"### {cs['name']} ({cs['timeframe']})")
-            col1.info(f"🔍 조건: {cond_desc}")
+            col1.info(f"🔍 전체 조건: {cond_desc}")
             if col2.button("🗑️ 삭제", key=f"del_cs_{i}"):
                 config["custom_strategies"].pop(i)
                 logic.save_config(config); logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4))
