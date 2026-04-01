@@ -32,10 +32,10 @@ def run_batch():
 
     for s in config.get("schedules", []):
         try:
-            # 알림 시간 설정 읽기 (기본값 09:00 또는 06:00 등)
-            s_h, s_m = map(int, s.get('time', '09:00').split(':'))
+            # 알림 시간 설정 읽기 (기본값 06:00)
+            s_h, s_m = map(int, s.get('time', '06:00').split(':'))
         except: 
-            s_h, s_m = 9, 0
+            s_h, s_m = 6, 0
         
         # 60분 윈도우 체크 (GitHub Action 지연 고려)
         time_match = (curr_h == s_h) and (curr_m >= s_m) and (curr_m < s_m + 60)
@@ -49,7 +49,7 @@ def run_batch():
 
         if is_manual or (time_match and not already_run):
             strat_name = s['strategy']
-            target_market = s.get('target', 'KOSPI/KOSDAQ')
+            target_market = s.get('target', 'KOSPI/KOSDAQ') # 저장된 시장 정보 사용
             
             # 전략 기반 주기(Period) 결정
             s_period = 'D'
@@ -66,22 +66,17 @@ def run_batch():
                 continue
                 
             results = []
-            # 병렬 분석으로 속도 대폭 개선
+            # 병렬 분석
             with ThreadPoolExecutor(max_workers=10) as exe:
                 futures = {exe.submit(logic.process_stock_multi_worker, getattr(r,'Symbol',getattr(r,'Index','')), getattr(r,'Name',''), [strat_name], s_period): r for r in df_l.itertuples()}
                 for f in as_completed(futures):
                     res = f.result()
                     if res:
                         results.append(res)
-                        # 포착 시 개별 차트 전송
-                        logic.send_telegram_with_chart(tg_token, tg_chat_id, res['코드'], res['종목명'], logic.get_processed_data(res['코드'], s_period), [strat_name])
             
-            # 결과가 없으면 요약 메시지만 전송
-            if not results:
-                logic.send_telegram_all(tg_token, tg_chat_id, [], [strat_name], target_market)
-                print(f"No results for {strat_name}. Summary sent.")
-            else:
-                print(f"Sent {len(results)} charts for {strat_name}.")
+            # 텍스트 요약 메시지만 발송 (그래프 제외 요청 반영)
+            logic.send_telegram_all(tg_token, tg_chat_id, results, [strat_name], target_market)
+            print(f"Sent summary for {strat_name} on {target_market}. Total: {len(results)}")
 
             new_logs.append({
                 "time": now_kst.strftime("%Y-%m-%d %H:%M"), 

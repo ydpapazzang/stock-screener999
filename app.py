@@ -127,17 +127,18 @@ elif curr_tab == "📅 알림 설정":
         f = st.selectbox("주기", ["매일", "매주 (월요일)", "매월 (1일)"])
         all_s = ["정석 정배열 (추세추종)", "거래량 폭발 (세력개입)"] + [s['name'] for s in config.get('custom_strategies', [])]
         s_choice = st.selectbox("전략", all_s)
+        t_choice = st.selectbox("대상 시장", ["KOSPI/KOSDAQ", "한국 ETF", "미국 나스닥", "미국 ETF"])
         if st.button("💾 저장"):
-            config['schedules'].append({"id":str(uuid.uuid4())[:8], "freq":f, "time":"06:00", "strategy":s_choice, "target":"KOSPI/KOSDAQ"})
+            config['schedules'].append({"id":str(uuid.uuid4())[:8], "freq":f, "time":"06:00", "strategy":s_choice, "target":t_choice})
             logic.save_config(config); logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4)); st.rerun()
     for i, s in enumerate(config.get('schedules', [])):
         with st.container(border=True):
             c1, c2, c3 = st.columns([4, 1, 1])
-            c1.write(f"### {s['freq']} | {s['strategy']}")
+            target_market = s.get('target', 'KOSPI/KOSDAQ')
+            c1.write(f"### {s['freq']} | {s['strategy']} ({target_market})")
             if c2.button("📡 발송", key=f"snd_{s['id']}"):
                 with st.spinner("분석 및 발송 중..."):
                     strat_name = s['strategy']
-                    target_market = s.get('target', 'KOSPI/KOSDAQ')
                     
                     # 전략 주기 결정
                     s_period = 'D'
@@ -154,23 +155,11 @@ elif curr_tab == "📅 알림 설정":
                             res = f.result()
                             if res: results.append(res)
                     
-                    if results:
-                        # 1. 요약 메시지 먼저 발송
-                        logic.send_telegram_all(TG_TOKEN, TG_CHAT_ID, results, [strat_name], target_market)
-                        
-                        # 2. 상위 10개만 차트 발송 (도배 방지)
-                        sent_count = 0
-                        for res in results[:10]:
-                            df_data = logic.get_processed_data(res['코드'], s_period)
-                            if df_data is not None:
-                                if logic.send_telegram_with_chart(TG_TOKEN, TG_CHAT_ID, res['코드'], res['종목명'], df_data, [strat_name]):
-                                    sent_count += 1
-                                    time.sleep(0.5) # 속도 조절
-                        
-                        st.success(f"✅ 총 {len(results)}건 포착! 요약 메시지와 상위 {sent_count}개의 차트를 발송했습니다.")
+                    # 텍스트 요약 메시지만 발송 (그래프 제외 요청 반영)
+                    if logic.send_telegram_all(TG_TOKEN, TG_CHAT_ID, results, [strat_name], target_market):
+                        st.success(f"✅ {target_market} 시장 {len(results)}건 포착 알림을 발송했습니다.")
                     else:
-                        logic.send_telegram_all(TG_TOKEN, TG_CHAT_ID, [], [strat_name], target_market)
-                        st.warning("조건에 맞는 종목이 없어 요약 알림만 발송되었습니다.")
+                        st.error("텔레그램 발송에 실패했습니다.")
             if c3.button("🗑️ 삭제", key=f"del_{s['id']}"):
                 config['schedules'].pop(i); logic.save_config(config); logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4)); st.rerun()
 
