@@ -93,15 +93,23 @@ def check_multi_signals(df, strategy_list):
                 period = int(cond.get('period', 0))
                 
                 if val_a is not None and val_b is not None:
-                    # shift(period)를 통해 n봉전 비교 구현
+                    p_type = cond.get('p_type', 'ago')
+                    period = int(cond.get('period', 0))
                     op = cond.get('op', '>=')
-                    a_s = val_a.shift(period)
-                    b_s = val_b.shift(period)
                     
-                    if op == ">=": c_cond &= (a_s >= b_s)
-                    elif op == "<=": c_cond &= (a_s <= b_s)
-                    elif op == ">": c_cond &= (a_s > b_s)
-                    elif op == "<": c_cond &= (a_s < b_s)
+                    # 기본 조건 시리즈 생성
+                    if op == ">=": base_cond = (val_a >= val_b)
+                    elif op == "<=": base_cond = (val_a <= val_b)
+                    elif op == ">": base_cond = (val_a > val_b)
+                    elif op == "<": base_cond = (val_a < val_b)
+                    else: base_cond = (val_a >= val_b)
+                    
+                    if p_type == "within":
+                        # N봉 이내: 최근 N+1개 봉 중 한 번이라도 True가 있으면 True
+                        c_cond &= base_cond.rolling(window=period + 1, min_periods=1).max().astype(bool)
+                    else:
+                        # N봉전: 정확히 N개 봉 전의 결과 사용
+                        c_cond &= base_cond.shift(period)
             cond = c_cond
         elif strategy == "정석 정배열 (추세추종)":
             ma5 = df['Close'].rolling(5).mean()

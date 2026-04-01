@@ -141,14 +141,20 @@ with tabs[2]:
         st.subheader("🎯 조건 구성 (모든 조건 만족 시 포착)")
         
         # 조건 입력 창
-        col1, col2, col3, col4 = st.columns([2, 2, 1, 2])
-        p_val = col1.selectbox("기간", [f"{i}봉전" for i in range(11)])
-        a_val = col2.selectbox("비교 A", ["종가"] + [f"MA{i}" for i in range(1, 101)])
-        op_val = col3.selectbox("조건", [">=", "<=", ">", "<"])
-        b_val = col4.selectbox("비교 B", [f"MA{i}" for i in range(1, 366)], index=19)
+        col1, col2, col3, col4, col5 = st.columns([2, 2, 2, 1, 2])
+        p_type = col1.selectbox("타입", ["N봉전", "N봉 이내"])
+        p_val = col2.selectbox("기간", [f"{i}봉" for i in range(11)])
+        a_val = col3.selectbox("비교 A", ["종가"] + [f"MA{i}" for i in range(1, 101)])
+        op_val = col4.selectbox("조건", [">=", "<=", ">", "<"])
+        b_val = col5.selectbox("비교 B", [f"MA{i}" for i in range(1, 366)], index=19)
         
         if st.button("➕ 조건 추가", use_container_width=True):
-            new_cond = {"a": a_val, "b": b_val, "period": int(p_val.replace("봉전", "")), "op": op_val}
+            new_cond = {
+                "a": a_val, "b": b_val, 
+                "period": int(p_val.replace("봉", "")), 
+                "op": op_val,
+                "p_type": "ago" if p_type == "N봉전" else "within"
+            }
             st.session_state.temp_conditions.append(new_cond)
             st.toast("조건이 리스트에 추가되었습니다!")
 
@@ -157,7 +163,8 @@ with tabs[2]:
             st.write("📝 **현재 추가된 조건들:**")
             for idx, cond in enumerate(st.session_state.temp_conditions):
                 c1, c2 = st.columns([5, 1])
-                c1.info(f"조건 {idx+1}: {cond['period']}봉전 {cond['a']} {cond.get('op', '>=')} {cond['b']}")
+                t_label = "봉전" if cond.get('p_type', 'ago') == "ago" else "봉 이내"
+                c1.info(f"조건 {idx+1}: {cond['period']}{t_label} {cond['a']} {cond.get('op', '>=')} {cond['b']}")
                 if c2.button("❌", key=f"del_temp_{idx}"):
                     st.session_state.temp_conditions.pop(idx)
                     st.rerun()
