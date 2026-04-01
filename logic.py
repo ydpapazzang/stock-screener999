@@ -149,12 +149,25 @@ def get_dividend_details(symbol):
     except: return None
 
 def send_telegram_all(token, chat_id, results, strategy_names, target_type):
-    if not token or not chat_id or not results: return False
-    msg = f"🚀 *[전략 포착]* {target_type}\n🎯 전략: {', '.join(strategy_names)}\n📊 포착: {len(results)}개\n\n"
-    for i, item in enumerate(results[:10]):
-        msg += f"{i+1}. *{item['종목명']}*\n   - 현재가: {item['현재가']} | 신규: {item['신규감지']}\n"
-    msg += f"\n🔗 [스크리너 접속](https://stock-screener999-ztg2dqzbktgsfn5xxguc7t.streamlit.app/)"
-    requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": chat_id, "text": msg, "parse_mode": "Markdown"})
+    if not token or not chat_id:
+        print("Telegram Error: Token or Chat ID missing.")
+        return False
+    
+    if not results:
+        msg = f"🔔 <b>[알림]</b> {target_type}\n🎯 전략: {', '.join(strategy_names)}\n\n현재 조건에 일치하는 종목이 없습니다."
+    else:
+        msg = f"🚀 <b>[전략 포착]</b> {target_type}\n🎯 전략: {', '.join(strategy_names)}\n📊 포착: {len(results)}개\n\n"
+        for i, item in enumerate(results[:10]):
+            msg += f"{i+1}. <b>{item['종목명']}</b>\n   - 현재가: {item['현재가']} | 신규: {item['신규감지']}\n"
+        msg += f"\n🔗 <a href='https://stock-screener999-ztg2dqzbktgsfn5xxguc7t.streamlit.app/'>스크리너 접속</a>"
+    
+    res = requests.post(
+        f"https://api.telegram.org/bot{token}/sendMessage", 
+        json={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"}
+    )
+    if res.status_code != 200:
+        print(f"Telegram API Error: {res.status_code} - {res.text}")
+        return False
     return True
 
 def get_searchable_list():
