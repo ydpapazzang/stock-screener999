@@ -65,7 +65,7 @@
     "custom_strategies": [
         {
             "name": "\uc6d4\ubd0912",
-            "timeframe": "\uc6d4\ubd09",
+            "timeframe": "\uc77c\ubd09",
             "conditions": [
                 {
                     "a": "\uc885\uac00",
@@ -73,13 +73,6 @@
                     "op": ">=",
                     "period": 0,
                     "p_type": "ago"
-                },
-                {
-                    "a": "\uc885\uac00",
-                    "b": "MA12",
-                    "op": "<=",
-                    "period": 5,
-                    "p_type": "within"
                 }
             ]
         },
