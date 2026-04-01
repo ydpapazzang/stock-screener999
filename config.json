@@ -8,13 +8,6 @@
             "time": "06:00",
             "strategy": "\uc6d4\ubd09 12\uc120 \ub3cc\ud30c",
             "target": "KOSPI/KOSDAQ"
-        },
-        {
-            "id": "887e3b39",
-            "freq": "\ub9e4\uc77c",
-            "time": "06:00",
-            "strategy": "\uc6d4\ubd09 12\uc120 \ub3cc\ud30c",
-            "target": "KOSPI/KOSDAQ"
         }
     ],
     "password": "6666",
