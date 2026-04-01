@@ -161,12 +161,12 @@ elif curr_tab == "🛠️ 전략 커스텀":
         t_tabs = st.tabs(["📈 이동평균 (MA)", "📊 RSI", "🔊 거래량"])
         with t_tabs[0]:
             col1, col2, col3, col4, col5, col6 = st.columns([2, 2, 2, 1, 2, 2])
-            ma_p_t = col1.selectbox("타입", ["N봉전", "N봉 이내"], key="ma_pt")
-            ma_p_v = col2.selectbox("기간", [f"{i}봉" for i in range(11)], key="ma_pv")
+            ma_p_v = col1.selectbox("기간", [f"{i}봉" for i in range(11)], key="ma_pv")
+            ma_p_t = col2.selectbox("타입", ["N봉전", "N봉 이내"], key="ma_pt")
             ma_a = col3.selectbox("비교 A", ["종가"]+[f"MA{i}" for i in range(1,101)], key="ma_a")
             ma_op = col4.selectbox("조건", [">=", "<=", ">", "<"], key="ma_op")
             ma_b = col5.selectbox("비교 B", [f"MA{i}" for i in range(1,366)], index=19, key="ma_b")
-            ma_disp = col6.number_input("최대 이격도 (%)", 0.0, 100.0, 0.0, 0.1, help="0은 무시. (예: 5 입력 시 A와 B의 간격이 5% 이내인 종목만 검색)", key="ma_disp")
+            ma_disp = col6.number_input("최대 이격도 (%)", 0.0, 100.0, 0.0, 0.1, help="0은 무시", key="ma_disp")
             
             if st.button("➕ MA 조건 추가", use_container_width=True):
                 st.session_state.temp_conditions.append({
@@ -178,8 +178,8 @@ elif curr_tab == "🛠️ 전략 커스텀":
                 st.rerun()
         with t_tabs[1]:
             col1, col2, col3, col4 = st.columns([2, 2, 1, 2])
-            rsi_p_t = col1.selectbox("타입", ["N봉전", "N봉 이내"], key="rsi_pt")
-            rsi_p_v = col2.selectbox("기간", [f"{i}봉" for i in range(11)], key="rsi_pv")
+            rsi_p_v = col1.selectbox("기간", [f"{i}봉" for i in range(11)], key="rsi_pv")
+            rsi_p_t = col2.selectbox("타입", ["N봉전", "N봉 이내"], key="rsi_pt")
             rsi_op = col3.selectbox("조건", [">=", "<=", ">", "<"], key="rsi_op")
             rsi_v = col4.number_input("RSI 값", 0, 100, 30, key="rsi_v")
             if st.button("➕ RSI 추가"):
@@ -187,8 +187,8 @@ elif curr_tab == "🛠️ 전략 커스텀":
                 st.rerun()
         with t_tabs[2]:
             col1, col2, col3, col4, col5 = st.columns([2, 2, 1, 2, 1])
-            vol_p_t = col1.selectbox("타입", ["N봉전", "N봉 이내"], key="vol_pt")
-            vol_p_v = col2.selectbox("기간", [f"{i}봉" for i in range(11)], key="vol_pv")
+            vol_p_v = col1.selectbox("기간", [f"{i}봉" for i in range(11)], key="vol_pv")
+            vol_p_t = col2.selectbox("타입", ["N봉전", "N봉 이내"], key="vol_pt")
             vol_op = col3.selectbox("조건", [">=", "<=", ">", "<"], key="vol_op")
             vol_b = col4.selectbox("비교 대상", ["VMA5", "VMA20", "VMA60"], key="vol_b")
             vol_m = col5.number_input("배수", 0.1, 10.0, 2.0, 0.1, key="vol_m")
