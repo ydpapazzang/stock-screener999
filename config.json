@@ -102,6 +102,19 @@
                     "p_type": "ago"
                 }
             ]
+        },
+        {
+            "name": "M12",
+            "timeframe": "\uc6d4\ubd09",
+            "conditions": [
+                {
+                    "a": "MA1",
+                    "b": "MA12",
+                    "op": ">=",
+                    "period": 0,
+                    "p_type": "ago"
+                }
+            ]
         }
     ],
     "watchlist": [
