@@ -24,12 +24,12 @@ def load_config():
     return {"schedules": [], "history": []}
 
 def save_config(config_data):
-    safe_config = {
-        "schedules": config_data.get("schedules", []),
-        "history": config_data.get("history", [])
-    }
+    # 기존 파일 로드 (secrets 보존을 위해)
+    current_config = load_config()
+    current_config.update(config_data)
+    
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(safe_config, f, ensure_ascii=False, indent=4)
+        json.dump(current_config, f, ensure_ascii=False, indent=4)
 
 def get_secret(key, default=None):
     try:
@@ -156,6 +156,21 @@ def send_telegram_all(token, chat_id, results, strategy_names, target_type):
     msg += f"\n🔗 [스크리너 접속](https://stock-screener999-ztg2dqzbktgsfn5xxguc7t.streamlit.app/)"
     requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": chat_id, "text": msg, "parse_mode": "Markdown"})
     return True
+
+def get_searchable_list():
+    """검색용 통합 종목 리스트 (KRX + 주요 미국주식)"""
+    try:
+        # 1. 한국 종목
+        df_kr = fdr.StockListing('KRX')[['Symbol', 'Name']]
+        kr_list = [f"{row.Name} ({row.Symbol})" for row in df_kr.itertuples()]
+        
+        # 2. 주요 미국 종목 (S&P 500)
+        df_us = fdr.StockListing('S&P500')[['Symbol', 'Name']]
+        us_list = [f"{row.Name} ({row.Symbol})" for row in df_us.itertuples()]
+        
+        return sorted(list(set(kr_list + us_list)))
+    except:
+        return ["Samsung Electronics (005930)", "Apple (AAPL)", "Microsoft (MSFT)"]
 
 def update_config_to_github(token, repo, content):
     if not token or not repo: return False

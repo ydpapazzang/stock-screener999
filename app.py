@@ -125,17 +125,38 @@ with tabs[2]:
     # [1] 입력 섹션
     with st.expander("➕ 보유 종목 추가", expanded=True):
         c1, c2, c3 = st.columns(3)
-        in_symbol = c1.text_input("티커/코드", placeholder="예: 005930 또는 O")
+        
+        # 검색용 리스트 로드 (캐시 활용 권장)
+        if "search_list" not in st.session_state:
+            with st.spinner("종목 리스트 로드 중..."):
+                st.session_state.search_list = logic.get_searchable_list()
+        
+        selected_stock = c1.selectbox("종목 검색", 
+                                     options=st.session_state.search_list,
+                                     index=None,
+                                     placeholder="종목명 또는 티커 입력",
+                                     help="한국 및 미국(S&P 500) 종목 검색이 가능합니다.")
+        
         in_qty = c2.number_input("보유 수량", min_value=1, value=10)
         in_price = c3.number_input("평균 단가", min_value=0.0, value=50000.0)
+        
         if st.button("포트폴리오에 추가"):
-            with st.spinner("데이터 조회 중..."):
-                details = logic.get_dividend_details(in_symbol)
-                if details:
-                    details.update({"qty": in_qty, "avg_price": in_price})
-                    st.session_state.portfolio.append(details)
-                    st.success(f"{details['name']} 추가됨!")
-                else: st.error("종목 정보를 찾을 수 없습니다.")
+            if selected_stock:
+                # "Samsung Electronics (005930)" -> "005930" 추출
+                import re
+                match = re.search(r'\((.*?)\)', selected_stock)
+                in_symbol = match.group(1) if match else selected_stock
+                
+                with st.spinner(f"{in_symbol} 데이터 조회 중..."):
+                    details = logic.get_dividend_details(in_symbol)
+                    if details:
+                        details.update({"qty": in_qty, "avg_price": in_price})
+                        st.session_state.portfolio.append(details)
+                        st.success(f"{details['name']} 추가됨!")
+                        st.rerun()
+                    else: st.error("종목 정보를 찾을 수 없습니다.")
+            else:
+                st.warning("종목을 선택해주세요.")
 
     if st.session_state.portfolio:
         df_port = pd.DataFrame(st.session_state.portfolio)
