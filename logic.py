@@ -198,6 +198,22 @@ def update_config_to_github(token, repo, content):
     import base64
     return requests.put(url, headers=h, json={"message":"Update config", "content": base64.b64encode(content.encode()).decode(), "sha":sha}).status_code in [200, 201]
 
+def send_telegram_all(token, chat_id, results, strategy_names, target_type):
+    if not token or not chat_id: return False
+    msg = f"🚀 <b>[{target_type}] 포착</b>\n🎯 전략: {', '.join(strategy_names)}\n📊 포착: {len(results)}개\n\n"
+    if not results:
+        msg = f"🔔 <b>[{target_type}]</b>\n🎯 전략: {', '.join(strategy_names)}\n\n현재 조건에 맞는 종목이 없습니다."
+    else:
+        for i, item in enumerate(results[:10]):
+            msg += f"{i+1}. <b>{item['종목명']}</b> ({item['현재가']})\n"
+        if len(results) > 10: msg += f"\n...외 {len(results)-10}건 더보기"
+    
+    try:
+        res = requests.post(f"https://api.telegram.org/bot{token}/sendMessage", 
+                            json={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"})
+        return res.status_code == 200
+    except: return False
+
 def create_advanced_chart(df, name, strats):
     df_p = df.tail(60)
     fig = go.Figure(data=[go.Candlestick(x=df_p.index, open=df_p['Open'], high=df_p['High'], low=df_p['Low'], close=df_p['Close'])])

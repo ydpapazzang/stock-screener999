@@ -134,13 +134,38 @@ elif curr_tab == "📅 알림 설정":
             c1, c2, c3 = st.columns([4, 1, 1])
             c1.write(f"### {s['freq']} | {s['strategy']}")
             if c2.button("📡 발송", key=f"snd_{s['id']}"):
-                with st.spinner("발송 중..."):
-                    targets = logic.get_listing_data("KOSPI/KOSDAQ").head(20)
-                    for r in targets.itertuples():
-                        df_d = logic.get_processed_data(r.Symbol, 'D')
-                        if df_d is not None and logic.check_multi_signals(df_d, [s['strategy']]).iloc[-1]:
-                            logic.send_telegram_with_chart(TG_TOKEN, TG_CHAT_ID, r.Symbol, r.Name, df_d, [s['strategy']])
-                    st.success("발송 완료!")
+                with st.spinner("분석 및 발송 중..."):
+                    strat_name = s['strategy']
+                    target_market = s.get('target', 'KOSPI/KOSDAQ')
+
+                    # 전략에 따른 주기(period) 결정
+                    s_period = 'D'
+                    for cs in config.get('custom_strategies', []):
+                        if cs['name'] == strat_name:
+                            s_period = 'M' if cs['timeframe'] == "월봉" else ('W' if cs['timeframe'] == "주봉" else 'D')
+
+                    # 종목 리스트 로드 (상위 100개 스캔)
+                    df_l = logic.get_listing_data(target_market).head(100)
+                    results = []
+
+                    # 병렬 분석
+                    with ThreadPoolExecutor(max_workers=10) as exe:
+                        futures = {exe.submit(logic.process_stock_multi_worker, getattr(r,'Symbol',getattr(r,'Index','')), getattr(r,'Name',''), [strat_name], s_period): r for r in df_l.itertuples()}
+                        for f in as_completed(futures):
+                            res = f.result()
+                            if res:
+                                results.append(res)
+                                # 포착 시 차트와 함께 즉시 발송
+                                df_data = logic.get_processed_data(res['코드'], s_period)
+                                if df_data is not None:
+                                    logic.send_telegram_with_chart(TG_TOKEN, TG_CHAT_ID, res['코드'], res['종목명'], df_data, [strat_name])
+
+                    # 결과가 없더라도 요약 메시지 발송 (시스템 생존 신고)
+                    if not results:
+                        logic.send_telegram_all(TG_TOKEN, TG_CHAT_ID, [], [strat_name], target_market)
+                        st.warning("조건에 맞는 종목이 없어 요약 메시지만 발송되었습니다.")
+                    else:
+                        st.success(f"{len(results)}건의 포착 종목을 차트와 함께 발송했습니다!")
             if c3.button("🗑️ 삭제", key=f"del_{s['id']}"):
                 config['schedules'].pop(i); logic.save_config(config); logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4)); st.rerun()
 
