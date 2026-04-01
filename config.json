@@ -9,6 +9,12 @@
             "strategy": "\uc6d4\ubd0912",
             "target": "\uc8fc\uc2dd",
             "limit": 100
+        },
+        {
+            "id": "3f200f8a",
+            "freq": "\ub9e4\uc77c",
+            "time": "06:00",
+            "strategy": "\uc815\uc11d \uc815\ubc30\uc5f4 (\ucd94\uc138\ucd94\uc885)"
         }
     ],
     "password": "6666",
@@ -116,6 +122,12 @@
                     "p_type": "ago"
                 }
             ]
+        }
+    ],
+    "watchlist": [
+        {
+            "Symbol": "005930",
+            "Name": "Samsung Electronics"
         }
     ]
 }
