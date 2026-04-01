@@ -3,14 +3,6 @@
     "tg_chat_id": "1782176235",
     "schedules": [
         {
-            "id": "d47e1428",
-            "freq": "\ub9e4\uc77c",
-            "time": "08:30",
-            "strategy": "5\uc77c \uc5f0\uc18d \uc0c1\uc2b9\uc138",
-            "target": "\uc8fc\uc2dd",
-            "limit": 100
-        },
-        {
             "id": "92c77779",
             "freq": "\ub9e4\uc77c",
             "time": "09:00",
