@@ -118,19 +118,27 @@ curr_tab = menu_options[st.session_state["active_tab_idx"]]
 if curr_tab == "🚀 전략 스캔":
     if 'last_results' in st.session_state:
         applied_strats = st.session_state.get('last_query_strats', "알 수 없음")
-        st.success(f"✅ **스캔 완료** | 적용 전략: `{applied_strats}`")
-        st.title("🚀 전략 스캔 결과")
-        st.dataframe(st.session_state['last_results'], use_container_width=True)
-        sel_name = st.selectbox("상세 차트 보기", st.session_state['last_results']['종목명'].tolist() if not st.session_state['last_results'].empty else [])
-        if sel_name:
-            clean_name = sel_name.split(" (")[0]
-            code = st.session_state['last_results'][st.session_state['last_results']['종목명']==sel_name]['코드'].values[0]
-            df_chart = logic.get_processed_data(code, period)
-            if df_chart is not None:
-                st.plotly_chart(logic.create_advanced_chart(df_chart, clean_name, [applied_strats]))
-    else:
-        st.title("🚀 전략 스캔")
-        st.info("👈 좌측 사이드바에서 전략을 선택하고 **[🔍 즉시 스캔 실행]** 버튼을 눌러주세요.")
+        df_res = st.session_state['last_results']
+        
+        if not df_res.empty:
+            st.success(f"✅ **스캔 완료** | 적용 전략: `{applied_strats}` | **총 {len(df_res)}건 포착**")
+            st.title("🚀 전략 스캔 결과")
+            
+            # 인덱스를 1부터 시작하도록 조정
+            df_display = df_res.copy()
+            df_display.index = range(1, len(df_display) + 1)
+            st.dataframe(df_display, use_container_width=True)
+            
+            sel_name = st.selectbox("상세 차트 보기", df_res['종목명'].tolist())
+            if sel_name:
+                clean_name = sel_name.split(" (")[0]
+                code = df_res[df_res['종목명']==sel_name]['코드'].values[0]
+                df_chart = logic.get_processed_data(code, period)
+                if df_chart is not None:
+                    st.plotly_chart(logic.create_advanced_chart(df_chart, clean_name, [applied_strats]))
+        else:
+            st.warning(f"✅ **스캔 완료** | 적용 전략: `{applied_strats}`")
+            st.info("검색된 결과가 0건입니다.")
 
 elif curr_tab == "📅 알림 설정":
     st.title("📅 자동 알림 스케줄")
