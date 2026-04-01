@@ -31,54 +31,75 @@ if not st.session_state["authenticated"]:
         else: st.error("비밀번호 불일치")
     st.stop()
 
-# --- [2] 메인 UI ---
-tabs = st.tabs(["🚀 전략 스캔", "📅 알림 설정", "🛠️ 전략 커스텀", "💰 배당 계산기", "⚙️ 시스템"])
+# --- [1] 기본 설정 및 로그인 ---
+st.set_page_config(page_title="Pro Strategic Screener", layout="wide", page_icon="⚡")
+config = logic.load_config()
 
-with tabs[0]:
-    st.title("⚡ 지능형 다중 전략 스캐너")
-    with st.sidebar:
-        st.header("🎯 스캔 설정")
-        category = st.selectbox("분석 단위", ["월봉 전략", "주봉 전략", "일봉 전략"])
-        if "월봉" in category:
-            base_strats = ["정석 정배열 (추세추종)", "20월선 눌림목 (조정매수)", "거래량 폭발 (세력개입)", "대시세 초입 (20선 돌파)", "월봉 MA12 돌파"]
-            period = 'M'
-        elif "주봉" in category:
-            base_strats = ["주봉 5/20 골든크로스", "주봉 RSI 과매도 탈출", "주봉 볼린저 하단 터치", "주봉 20선 돌파 및 안착"]
-            period = 'W'
-        else:
-            base_strats = ["5일 연속 상승세", "외인/기관 쌍끌이 매수", "꾸준한 배당주"]
-            period = 'D'
-            
-        # 커스텀 전략 중 해당 주기에 맞는 것 추가
-        custom_list = [s['name'] for s in config.get('custom_strategies', []) if s.get('timeframe') == category[:2]]
-        all_options = base_strats + custom_list
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+if "active_tab" not in st.session_state:
+    st.session_state["active_tab"] = 0
+
+# --- [2] 사이드바 전역 설정 ---
+with st.sidebar:
+    st.title("🎯 전역 컨트롤")
+    category = st.selectbox("분석 단위", ["월봉 전략", "주봉 전략", "일봉 전략"])
+    if "월봉" in category:
+        base_strats = ["정석 정배열 (추세추종)", "20월선 눌림목 (조정매수)", "거래량 폭발 (세력개입)", "대시세 초입 (20선 돌파)", "월봉 MA12 돌파"]
+        period = 'M'
+    elif "주봉" in category:
+        base_strats = ["주봉 5/20 골든크로스", "주봉 RSI 과매도 탈출", "주봉 볼린저 하단 터치", "주봉 20선 돌파 및 안착"]
+        period = 'W'
+    else:
+        base_strats = ["5일 연속 상승세", "외인/기관 쌍끌이 매수", "꾸준한 배당주"]
+        period = 'D'
         
-        sel_strats = st.multiselect("전략 선택", all_options, default=[all_options[0]])
-        target = st.radio("대상", ["주식", "ETF"])
-        min_cap = st.slider("최소 시총 (억)", 0, 5000, 500, 100) if target=="주식" else 0
-        limit = st.slider("최대 분석 수", 10, 500, 100)
-
-    if st.button("🚀 스캔 시작", use_container_width=True):
+    custom_list = [s['name'] for s in config.get('custom_strategies', []) if s.get('timeframe') == category[:2]]
+    all_options = base_strats + custom_list
+    sel_strats = st.multiselect("전략 선택", all_options, default=[all_options[0]])
+    target = st.radio("대상", ["주식", "ETF"])
+    min_cap = st.slider("최소 시총 (억)", 0, 5000, 500, 100) if target=="주식" else 0
+    limit = st.slider("최대 분석 수", 10, 500, 100)
+    
+    st.divider()
+    if st.button("🔍 즉시 스캔 실행", use_container_width=True, type="primary"):
         df_list = logic.get_listing_data(target)
         if not df_list.empty:
             if target == "주식":
                 df_list = df_list[df_list.get('시총(억)', 0) >= min_cap]
             targets = df_list.head(limit)
             results = []
-            p_bar = st.progress(0)
-            with ThreadPoolExecutor(max_workers=10) as exe:
-                futures = {exe.submit(logic.process_stock_multi_worker, r.Symbol, r.Name, sel_strats, period): r for r in targets.itertuples()}
-                for i, f in enumerate(as_completed(futures)):
-                    res = f.result()
-                    if res: results.append(res)
-                    p_bar.progress((i+1)/len(targets))
+            with st.spinner("종목 분석 중..."):
+                with ThreadPoolExecutor(max_workers=10) as exe:
+                    futures = {exe.submit(logic.process_stock_multi_worker, r.Symbol, r.Name, sel_strats, period): r for r in targets.itertuples()}
+                    for f in as_completed(futures):
+                        res = f.result()
+                        if res: results.append(res)
             if results:
                 st.session_state['last_results'] = pd.DataFrame(results).sort_values(by=["점수"], ascending=False)
-                st.success(f"{len(results)}개 종목 포착!")
+                st.session_state["active_tab"] = 0 # 스캔 탭으로 이동
+                st.rerun()
             else: st.warning("포착된 종목이 없습니다.")
 
+if not st.session_state["authenticated"]:
+    # ... (login logic)
+    st.title("🔒 보안 접속")
+    pw_input = st.text_input("비밀번호", type="password")
+    if st.button("접속") or pw_input:
+        if pw_input == ACCESS_PW:
+            st.session_state["authenticated"] = True
+            st.rerun()
+        else: st.error("비밀번호 불일치")
+    st.stop()
+
+# --- [3] 메인 UI ---
+tabs = st.tabs(["🚀 전략 스캔", "📅 알림 설정", "🛠️ 전략 커스텀", "💰 배당 계산기", "⚙️ 시스템"])
+
+with tabs[0]:
+    st.title("🚀 전략 스캔 결과")
     if 'last_results' in st.session_state:
         st.dataframe(st.session_state['last_results'], use_container_width=True)
+        # ... (chart logic)
         sel_name = st.selectbox("차트 보기", st.session_state['last_results']['종목명'].tolist())
         if sel_name:
             clean_name = sel_name.split(" (")[0]
@@ -86,62 +107,59 @@ with tabs[0]:
             df_chart = logic.get_processed_data(code, period)
             if df_chart is not None:
                 st.plotly_chart(logic.create_advanced_chart(df_chart, clean_name, sel_strats))
+    else:
+        st.info("좌측 사이드바에서 [즉시 스캔 실행] 버튼을 눌러 분석을 시작하세요.")
 
 with tabs[1]:
+    # ... (notification logic)
     st.title("📅 자동 알림 스케줄")
     import uuid
     with st.expander("➕ 새 알림 추가"):
         f = st.selectbox("주기", ["매일", "매주 (월요일)", "매월 (1일)", "매월 (말일)"])
-        # 모든 전략 리스트 (기본 + 커스텀)
         base_all = ["정석 정배열 (추세추종)", "20월선 눌림목 (조정매수)", "거래량 폭발 (세력개입)", "5일 연속 상승세", "외인/기관 쌍끌이 매수", "꾸준한 배당주"]
         custom_all = [s['name'] for s in config.get('custom_strategies', [])]
-        s = st.selectbox("전략", base_all + custom_all)
+        s_choice = st.selectbox("전략", base_all + custom_all)
         st.info("💡 **알림 시간 안내**: 모든 알림은 오전 06:00 (KST)에 일괄 발송됩니다.")
         if st.button("💾 알림 저장"):
-            new_s = {"id": str(uuid.uuid4())[:8], "freq": f, "time": "06:00", "strategy": s, "target": "주식", "limit": 100}
+            new_s = {"id": str(uuid.uuid4())[:8], "freq": f, "time": "06:00", "strategy": s_choice, "target": "주식", "limit": 100}
             config['schedules'].append(new_s); logic.save_config(config)
             logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4))
             st.success("저장 완료!"); st.rerun()
 
-    for i, s in enumerate(config.get('schedules', [])):
+    for i, s_item in enumerate(config.get('schedules', [])):
         with st.container(border=True):
             c1, c2, c3 = st.columns([4, 1, 1])
-            c1.write(f"### 📡 {s['freq']} {s['time']} | {s['strategy']}")
-            if c2.button("📡 발송", key=f"t_{s['id']}"):
+            c1.write(f"### 📡 {s_item['freq']} {s_item['time']} | {s_item['strategy']}")
+            if c2.button("📡 발송", key=f"t_{s_item['id']}"):
                 with st.spinner("발송 중..."):
                     df_l = logic.get_listing_data("주식").head(50)
                     res = []
-                    # 커스텀 전략인지 확인하여 주기(period) 결정
                     s_period = 'D'
                     for cs in config.get('custom_strategies', []):
-                        if cs['name'] == s['strategy']:
+                        if cs['name'] == s_item['strategy']:
                             s_period = 'M' if cs['timeframe'] == "월봉" else ('W' if cs['timeframe'] == "주봉" else 'D')
-                    
                     with ThreadPoolExecutor(max_workers=5) as exe:
-                        futures = [exe.submit(logic.process_stock_multi_worker, r.Symbol, r.Name, [s['strategy']], s_period) for r in df_l.itertuples()]
+                        futures = [exe.submit(logic.process_stock_multi_worker, r.Symbol, r.Name, [s_item['strategy']], s_period) for r in df_l.itertuples()]
                         for f in as_completed(futures):
                             if f.result(): res.append(f.result())
-                    logic.send_telegram_all(TG_TOKEN, TG_CHAT_ID, res, [s['strategy']], "주식")
+                    logic.send_telegram_all(TG_TOKEN, TG_CHAT_ID, res, [s_item['strategy']], "주식")
                     st.success("발송 완료!")
-            if c3.button("🗑️ 삭제", key=f"d_{s['id']}"):
+            if c3.button("🗑️ 삭제", key=f"d_{s_item['id']}"):
                 config['schedules'].pop(i); logic.save_config(config)
                 logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4)); st.rerun()
 
 with tabs[2]:
     st.title("🛠️ 나만의 전략 커스텀")
-    
     if "custom_strategies" not in config: config["custom_strategies"] = []
     if "temp_conditions" not in st.session_state: st.session_state.temp_conditions = []
     
     with st.expander("✨ 새 커스텀 전략 만들기", expanded=True):
         c_name = st.text_input("전략명", placeholder="예: 골든크로스 + 정배열")
         c_unit = st.selectbox("캔들 단위", ["일봉", "주봉", "월봉"])
-        
         st.write("---")
-        st.subheader("🎯 조건 구성 (모든 조건 만족 시 포착)")
-        
+        st.subheader("🎯 조건 구성")
         c_tabs = st.tabs(["📈 이동평균 (MA)", "📊 RSI", "🔊 거래량"])
-        
+        # ... (condition tabs)
         with c_tabs[0]:
             col1, col2, col3, col4, col5 = st.columns([2, 2, 2, 1, 2])
             ma_p_type = col1.selectbox("타입", ["N봉전", "N봉 이내"], key="ma_pt")
@@ -150,13 +168,8 @@ with tabs[2]:
             ma_op = col4.selectbox("조건", [">=", "<=", ">", "<"], key="ma_op")
             ma_b = col5.selectbox("비교 B", [f"MA{i}" for i in range(1, 366)], index=19, key="ma_b")
             if st.button("➕ MA 조건 추가", use_container_width=True):
-                st.session_state.temp_conditions.append({
-                    "a": ma_a, "b": ma_b, "op": ma_op, 
-                    "period": int(ma_p_val.replace("봉", "")), 
-                    "p_type": "ago" if ma_p_type == "N봉전" else "within"
-                })
+                st.session_state.temp_conditions.append({"a": ma_a, "b": ma_b, "op": ma_op, "period": int(ma_p_val.replace("봉", "")), "p_type": "ago" if ma_p_type == "N봉전" else "within"})
                 st.toast("MA 조건 추가됨")
-
         with c_tabs[1]:
             col1, col2, col3, col4 = st.columns([2, 2, 1, 2])
             rsi_p_type = col1.selectbox("타입", ["N봉전", "N봉 이내"], key="rsi_pt")
@@ -164,13 +177,8 @@ with tabs[2]:
             rsi_op = col3.selectbox("조건", [">=", "<=", ">", "<"], key="rsi_op")
             rsi_val = col4.number_input("RSI 값", 0, 100, 30, key="rsi_val")
             if st.button("➕ RSI 조건 추가", use_container_width=True):
-                st.session_state.temp_conditions.append({
-                    "a": "RSI", "b": str(rsi_val), "op": rsi_op,
-                    "period": int(rsi_p_val.replace("봉", "")),
-                    "p_type": "ago" if rsi_p_type == "N봉전" else "within"
-                })
+                st.session_state.temp_conditions.append({"a": "RSI", "b": str(rsi_val), "op": rsi_op, "period": int(rsi_p_val.replace("봉", "")), "p_type": "ago" if rsi_p_type == "N봉전" else "within"})
                 st.toast("RSI 조건 추가됨")
-
         with c_tabs[2]:
             col1, col2, col3, col4, col5 = st.columns([2, 2, 1, 2, 1])
             vol_p_type = col1.selectbox("타입", ["N봉전", "N봉 이내"], key="vol_pt")
@@ -179,53 +187,29 @@ with tabs[2]:
             vol_base = col4.selectbox("비교 대상", ["VMA5", "VMA20", "VMA60"], key="vol_base")
             vol_mult = col5.number_input("배수", 0.1, 10.0, 2.0, 0.1, key="vol_mult")
             if st.button("➕ 거래량 조건 추가", use_container_width=True):
-                st.session_state.temp_conditions.append({
-                    "a": "거래량", "b": f"{vol_base} * {vol_mult}", "op": vol_op,
-                    "period": int(vol_p_val.replace("봉", "")),
-                    "p_type": "ago" if vol_p_type == "N봉전" else "within"
-                })
+                st.session_state.temp_conditions.append({"a": "거래량", "b": f"{vol_base} * {vol_mult}", "op": vol_op, "period": int(vol_p_val.replace("봉", "")), "p_type": "ago" if vol_p_type == "N봉전" else "within"})
                 st.toast("거래량 조건 추가됨")
 
-        # 현재 추가된 조건 리스트 표시
         if st.session_state.temp_conditions:
-            st.write("📝 **현재 추가된 조건들:**")
+            st.divider()
             for idx, cond in enumerate(st.session_state.temp_conditions):
                 c1, c2 = st.columns([5, 1])
                 t_label = "봉전" if cond.get('p_type', 'ago') == "ago" else "봉 이내"
                 c1.info(f"조건 {idx+1}: {cond['period']}{t_label} {cond['a']} {cond.get('op', '>=')} {cond['b']}")
                 if c2.button("❌", key=f"del_temp_{idx}"):
-                    st.session_state.temp_conditions.pop(idx)
-                    st.rerun()
+                    st.session_state.temp_conditions.pop(idx); st.rerun()
             
-            if st.button("💾 전체 전략 저장", type="primary", use_container_width=True):
+            b_col1, b_col2 = st.columns(2)
+            if b_col1.button("💾 전체 전략 저장", type="primary", use_container_width=True):
                 if not c_name: st.error("전략명을 입력하세요.")
                 else:
-                    new_cs = {
-                        "name": c_name,
-                        "timeframe": c_unit,
-                        "conditions": st.session_state.temp_conditions.copy()
-                    }
-                    config["custom_strategies"].append(new_cs)
-                    logic.save_config(config)
+                    new_cs = {"name": c_name, "timeframe": c_unit, "conditions": st.session_state.temp_conditions.copy()}
+                    config["custom_strategies"].append(new_cs); logic.save_config(config)
                     logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4))
-                    st.session_state.temp_conditions = [] # 초기화
-                    st.success(f"'{c_name}' 전략이 최종 저장되었습니다!")
-                    st.rerun()
-        else:
-            st.warning("최소 한 개 이상의 조건을 추가해야 전략 저장이 가능합니다.")
-
-    st.write("---")
-    st.subheader("📋 내 커스텀 전략 목록")
-    for i, cs in enumerate(config.get("custom_strategies", [])):
-        with st.container(border=True):
-            col1, col2 = st.columns([5, 1])
-            cond_desc = " AND ".join([f"[{c['period']}봉전 {c['a']} ≥ {c['b']}]" for c in cs['conditions']])
-            col1.write(f"### {cs['name']} ({cs['timeframe']})")
-            col1.info(f"🔍 전체 조건: {cond_desc}")
-            if col2.button("🗑️ 삭제", key=f"del_cs_{i}"):
-                config["custom_strategies"].pop(i)
-                logic.save_config(config); logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4))
-                st.rerun()
+                    st.session_state.temp_conditions = []; st.success(f"'{c_name}' 저장됨!"); st.rerun()
+            if b_col2.button("🧹 작성 내용 초기화", use_container_width=True):
+                st.session_state.temp_conditions = []; st.rerun()
+        else: st.warning("조건을 추가하세요.")
 
 with tabs[3]:
     st.title("💰 스마트 배당금 계산기")
