@@ -1,4 +1,4 @@
-# VERSION: 1.1.1 (Universal Search & Watchlist Fix)
+# VERSION: 1.1.2 (Universal Global Search Fix)
 import FinanceDataReader as fdr
 import pandas as pd
 import numpy as np
@@ -17,7 +17,6 @@ import matplotlib.pyplot as plt
 
 CONFIG_FILE = "config.json"
 
-# --- [0] 설정 및 캐시 관리 ---
 def load_config():
     if os.path.exists(CONFIG_FILE):
         try:
@@ -38,7 +37,37 @@ def get_secret(key, default=None):
     except: pass
     return os.environ.get(key, default)
 
-# --- [1] 데이터 엔진 ---
+@st.cache_data(ttl=86400) # 24시간 캐싱
+def get_searchable_list():
+    """한국/미국 주식 및 ETF 전체 리스트 통합 생성"""
+    final_list = []
+    
+    # 1. 한국 시장 (주식 + ETF)
+    try:
+        df_krx = fdr.StockListing('KRX')[['Symbol', 'Name']]
+        final_list += [f"{r.Name} ({r.Symbol})" for r in df_krx.itertuples()]
+        df_kr_etf = fdr.StockListing('ETF/KR')[['Symbol', 'Name']]
+        final_list += [f"[ETF] {r.Name} ({r.Symbol})" for r in df_kr_etf.itertuples()]
+    except: pass
+
+    # 2. 미국 시장 (NASDAQ + NYSE + ETF)
+    try:
+        # 나스닥
+        df_nas = fdr.StockListing('NASDAQ')[['Symbol', 'Name']]
+        final_list += [f"{r.Name} ({r.Symbol})" for r in df_nas.itertuples()[:2000]] # 주요종목 2000개
+        # NYSE
+        df_nyse = fdr.StockListing('NYSE')[['Symbol', 'Name']]
+        final_list += [f"{r.Name} ({r.Symbol})" for r in df_nyse.itertuples()[:1000]]
+        # 미국 ETF
+        df_us_etf = fdr.StockListing('ETF/US')[['Symbol', 'Name']]
+        final_list += [f"[US ETF] {r.Name} ({r.Symbol})" for r in df_us_etf.itertuples()[:500]]
+    except: pass
+
+    if not final_list:
+        return ["삼성전자 (005930)", "SK하이닉스 (000660)", "Apple (AAPL)", "NVIDIA (NVDA)", "Tesla (TSLA)"]
+    
+    return sorted(list(set(final_list)))
+
 @st.cache_data(ttl=3600)
 def get_listing_data(target):
     try:
@@ -52,27 +81,12 @@ def get_listing_data(target):
         return df[['Symbol', 'Name', '시총(억)']]
     except: return pd.DataFrame()
 
-@st.cache_data(ttl=86400) # 종목 검색 리스트는 하루 단위 캐싱
-def get_searchable_list():
-    try:
-        # 1. 한국 시장 전체
-        df_kr = fdr.StockListing('KRX')[['Symbol', 'Name']]
-        kr_list = [f"{r.Name} ({r.Symbol})" for r in df_kr.itertuples()]
-        
-        # 2. 미국 나스닥 주요 종목
-        df_us = fdr.StockListing('NASDAQ')[['Symbol', 'Name']]
-        us_list = [f"{r.Name} ({r.Symbol})" for r in df_us.itertuples()[:1000]] # 상위 1000개만 포함하여 속도 확보
-        
-        return sorted(list(set(kr_list + us_list)))
-    except Exception as e:
-        print(f"Search List Error: {e}")
-        return ["삼성전자 (005930)", "SK하이닉스 (000660)", "Apple (AAPL)", "NVIDIA (NVDA)", "Tesla (TSLA)"]
-
 @st.cache_data(ttl=1800)
 def get_processed_data(symbol, period='D'):
     try:
-        is_kr = str(symbol).isdigit() and len(str(symbol)) == 6
-        yf_sym = f"{symbol}.KS" if is_kr and int(symbol) < 900000 else (f"{symbol}.KQ" if is_kr else symbol)
+        sym_str = str(symbol)
+        is_kr = sym_str.isdigit() and len(sym_str) == 6
+        yf_sym = f"{sym_str}.KS" if is_kr and int(sym_str) < 900000 else (f"{sym_str}.KQ" if is_kr else sym_str)
         
         ticker = yf.Ticker(yf_sym)
         df = ticker.history(period="5y", interval="1d")
@@ -91,7 +105,6 @@ def get_processed_data(symbol, period='D'):
         return df
     except: return None
 
-# (나머지 전략 엔진 및 알림 함수들은 유지됨)
 def get_indicator_val(df, key):
     k = str(key).upper()
     if k == "종가": return df['Close']
@@ -181,8 +194,9 @@ def get_external_link(symbol):
 
 def get_dividend_details(symbol):
     try:
-        is_kr = str(symbol).isdigit() and len(str(symbol)) == 6
-        yf_sym = f"{symbol}.KS" if is_kr and int(symbol) < 900000 else (f"{symbol}.KQ" if is_kr else symbol)
+        sym_str = str(symbol)
+        is_kr = sym_str.isdigit() and len(sym_str) == 6
+        yf_sym = f"{sym_str}.KS" if is_kr and int(sym_str) < 900000 else (f"{sym_str}.KQ" if is_kr else sym_str)
         t = yf.Ticker(yf_sym); i = t.info; h = t.dividends
         m = sorted(list(set(h.tail(8).index.month))) if not h.empty else []
         return {"name": i.get('shortName', symbol), "dps": i.get('dividendRate', 0) or 0, "yield": round((i.get('dividendYield', 0) or 0)*100, 2), "currency": i.get('currency', 'KRW'), "payout": round(i.get('payoutRatio', 0)*100, 1), "months": m}
@@ -194,7 +208,6 @@ def process_stock_multi_worker(symbol, name, strategy_list, period_key):
         if df is not None and len(df) >= 2:
             sig = check_multi_signals(df, strategy_list)
             if sig.iloc[-1]:
-                # 3년 백테스트 결과 포함
                 df_3y = df.tail(252*3) if period_key=='D' else (df.tail(52*3) if period_key=='W' else df.tail(12*3))
                 win, ret, cnt = run_backtest(df_3y, strategy_list)
                 status = "🚀 최초진입" if not sig.iloc[-2] else "📈 추세유지"
