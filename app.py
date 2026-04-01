@@ -6,14 +6,14 @@ import uuid
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# --- [0] 보안 및 설정 ---
+# --- [0] 보안 설정 ---
 GH_TOKEN = logic.get_secret("GH_TOKEN", "")
 GH_REPO = logic.get_secret("GH_REPO", "ydpapazzang/stock-screener999")
 TG_TOKEN = logic.get_secret("TELEGRAM_TOKEN", "")
 TG_CHAT_ID = logic.get_secret("TELEGRAM_CHAT_ID", "")
 ACCESS_PW = logic.get_secret("ACCESS_PASSWORD", "1234")
 
-st.set_page_config(page_title="Screener Pro", layout="wide", page_icon="⚡")
+st.set_page_config(page_title="Strategic Screener Pro", layout="wide", page_icon="⚡")
 config = logic.load_config()
 
 # 세션 상태 초기화
@@ -45,7 +45,7 @@ with st.sidebar:
                 st.session_state["scanning"] = True; st.rerun()
     else: st.error("🔒 보안 접속 필요")
 
-# 스캔 엔진 실행
+# --- [1.5] 스캔 로직 ---
 if st.session_state["scanning"]:
     df_l = pd.DataFrame(config.get('watchlist', [])) if target == "⭐ 관심종목" else logic.get_listing_data(target)
     if not df_l.empty:
@@ -65,8 +65,9 @@ if st.session_state["scanning"]:
 
 if not st.session_state["authenticated"]:
     st.title("🔒 보안 접속")
-    if st.text_input("비밀번호", type="password") == ACCESS_PW:
-        st.session_state["authenticated"] = True; st.rerun()
+    p_in = st.text_input("비밀번호", type="password")
+    if st.button("접속") or (p_in == ACCESS_PW): 
+        if p_in == ACCESS_PW: st.session_state["authenticated"] = True; st.rerun()
     st.stop()
 
 # --- [2] 메인 UI ---
@@ -117,23 +118,23 @@ elif curr == "📅 알림 설정":
     with st.expander("➕ 새 알림 추가"):
         f = st.selectbox("주기", ["매일", "매주 (월요일)", "매월 (1일)"])
         all_s = ["정석 정배열 (추세추종)", "거래량 폭발 (세력개입)"] + [s['name'] for s in config.get('custom_strategies', [])]
-        s_choice = st.selectbox("전략", all_s)
+        s_c = st.selectbox("전략", all_s)
         if st.button("💾 저장"):
-            config['schedules'].append({"id":str(uuid.uuid4())[:8], "freq":f, "time":"06:00", "strategy":s_choice, "target":"KOSPI/KOSDAQ"})
+            config['schedules'].append({"id":str(uuid.uuid4())[:8], "freq":f, "time":"06:00", "strategy":s_c, "target":"KOSPI/KOSDAQ"})
             logic.save_config(config); logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4)); st.rerun()
     for i, s in enumerate(config.get('schedules', [])):
         with st.container(border=True):
             c1, c2, c3 = st.columns([4, 1, 1])
             c1.write(f"### {s['freq']} | {s['strategy']}")
-            if c2.button("📡 발송", key=f"send_{s['id']}"):
+            if c2.button("📡 발송", key=f"snd_{s['id']}"):
                 with st.spinner("발송 중..."):
-                    df_listing = logic.get_listing_data("KOSPI/KOSDAQ").head(20)
-                    for r in df_listing.itertuples():
-                        df_data = logic.get_processed_data(r.Symbol, 'D')
-                        if df_data is not None and logic.check_multi_signals(df_data, [s['strategy']]).iloc[-1]:
-                            logic.send_telegram_with_chart(TG_TOKEN, TG_CHAT_ID, r.Symbol, r.Name, df_data, [s['strategy']])
+                    targets = logic.get_listing_data("KOSPI/KOSDAQ").head(30)
+                    for r in targets.itertuples():
+                        df_d = logic.get_processed_data(r.Symbol, 'D')
+                        if df_d is not None and logic.check_multi_signals(df_d, [s['strategy']]).iloc[-1]:
+                            logic.send_telegram_with_chart(TG_TOKEN, TG_CHAT_ID, r.Symbol, r.Name, df_d, [s['strategy']])
                     st.success("발송 완료!")
-            if c3.button("🗑️ 삭제", key=f"del_s_{s['id']}"):
+            if c3.button("🗑️ 삭제", key=f"del_{s['id']}"):
                 config['schedules'].pop(i); logic.save_config(config); logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4)); st.rerun()
 
 elif curr == "🛠️ 전략 커스텀":
@@ -144,7 +145,7 @@ elif curr == "🛠️ 전략 커스텀":
     with st.expander("📝 전략 작성 및 검증", expanded=True):
         d_name = config["custom_strategies"][st.session_state.editing_idx]["name"] if is_edit else ""
         c_name = st.text_input("전략명", value=d_name)
-        c_unit = st.selectbox("캔들 단위", ["일봉", "주봉", "월봉"])
+        c_unit = st.selectbox("캔들 단위", ["일봉", "주봉", "월봉"], index=["일봉", "주봉", "월봉"].index(config["custom_strategies"][st.session_state.editing_idx]["timeframe"]) if is_edit else 0)
         
         t_tabs = st.tabs(["📈 이동평균 (MA)", "📊 RSI", "🔊 거래량"])
         with t_tabs[0]:
@@ -163,7 +164,7 @@ elif curr == "🛠️ 전략 커스텀":
             rsi_p_v = col2.selectbox("기간", [f"{i}봉" for i in range(11)], key="rsi_pv")
             rsi_op = col3.selectbox("조건", [">=", "<=", ">", "<"], key="rsi_op")
             rsi_v = col4.number_input("RSI 값", 0, 100, 30, key="rsi_v")
-            if st.button("➕ RSI 조건 추가"):
+            if st.button("➕ RSI 추가"):
                 st.session_state.temp_conditions.append({"a":"RSI", "b":str(rsi_v), "op":rsi_op, "period":int(rsi_p_v.replace("봉","")), "p_type":"ago" if rsi_p_t=="N봉전" else "within"})
                 st.rerun()
         with t_tabs[2]:
@@ -189,7 +190,7 @@ elif curr == "🛠️ 전략 커스텀":
                 with st.spinner("분석 중..."):
                     ts = "005930" if c_unit != "월봉" else "AAPL"
                     win, ret, cnt = logic.run_backtest(logic.get_processed_data(ts, period), [c_name])
-                    st.metric(f"{ts} (3년) 성과", f"승률 {win}%", f"평균수익 {ret}%")
+                    st.metric(f"{ts} (3년) 성과", f"승률 {win}%", f"수익 {ret}%")
             if b2.button("💾 저장", type="primary", use_container_width=True):
                 new_s = {"name":c_name, "timeframe":c_unit, "conditions":st.session_state.temp_conditions.copy()}
                 if is_edit: config["custom_strategies"][st.session_state.editing_idx] = new_s
