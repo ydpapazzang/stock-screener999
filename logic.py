@@ -55,24 +55,41 @@ def get_processed_data(symbol, period='M'):
         else:
             df_res = df
         
-        # 기본 지표들 (성능을 위해 필요한 것만 계산, 커스텀은 나중에 추가)
+        # 기본 지표들
         df_res['ma5'] = df_res['Close'].rolling(5).mean()
         df_res['ma20'] = df_res['Close'].rolling(20).mean()
         df_res['ma60'] = df_res['Close'].rolling(60).mean()
         df_res['vol_ma5'] = df_res['Volume'].rolling(5).mean()
         
+        # RSI 계산
+        delta = df_res['Close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+        df_res['rsi'] = 100 - (100 / (1 + (gain / (loss + 1e-9))))
+        
         return df_res.dropna()
     except: return None
 
 def get_indicator_val(df, key):
-    """지표 이름(종가, MA20 등)에 따른 컬럼 또는 계산값 반환"""
+    """지표 이름에 따른 시리즈 반환"""
     if key == "종가": return df['Close']
+    if key == "거래량": return df['Volume']
+    if key == "RSI": return df['rsi']
     if key.startswith("MA"):
         try:
             n = int(key[2:])
             return df['Close'].rolling(n).mean()
         except: return None
-    return None
+    if key.startswith("VMA"): # 거래량 이동평균
+        try:
+            n = int(key[3:])
+            return df['Volume'].rolling(n).mean()
+        except: return None
+    # 고정 숫자 값 처리 (RSI < 30 등)
+    try:
+        val = float(key)
+        return pd.Series(val, index=df.index)
+    except: return None
 
 def check_multi_signals(df, strategy_list):
     if df is None or len(df) < 2: return pd.Series(False, index=df.index if df is not None else [])
@@ -83,21 +100,24 @@ def check_multi_signals(df, strategy_list):
     
     for strategy in strategy_list:
         if strategy in custom_strats:
-            # --- [커스텀 전략 처리] ---
             s_data = custom_strats[strategy]
             c_cond = pd.Series(True, index=df.index)
             for cond in s_data.get('conditions', []):
-                # cond: {"a": "종가", "b": "MA20", "period": 0}
                 val_a = get_indicator_val(df, cond['a'])
-                val_b = get_indicator_val(df, cond['b'])
-                period = int(cond.get('period', 0))
+                
+                # 특수 처리: b가 "VMA5 * 2" 같은 형태일 경우
+                b_key = cond['b']
+                if " * " in str(b_key):
+                    base_b, mult = b_key.split(" * ")
+                    val_b = get_indicator_val(df, base_b) * float(mult)
+                else:
+                    val_b = get_indicator_val(df, b_key)
                 
                 if val_a is not None and val_b is not None:
                     p_type = cond.get('p_type', 'ago')
                     period = int(cond.get('period', 0))
                     op = cond.get('op', '>=')
                     
-                    # 기본 조건 시리즈 생성
                     if op == ">=": base_cond = (val_a >= val_b)
                     elif op == "<=": base_cond = (val_a <= val_b)
                     elif op == ">": base_cond = (val_a > val_b)
@@ -105,10 +125,8 @@ def check_multi_signals(df, strategy_list):
                     else: base_cond = (val_a >= val_b)
                     
                     if p_type == "within":
-                        # N봉 이내: 최근 N+1개 봉 중 한 번이라도 True가 있으면 True
                         c_cond &= base_cond.rolling(window=period + 1, min_periods=1).max().astype(bool)
                     else:
-                        # N봉전: 정확히 N개 봉 전의 결과 사용
                         c_cond &= base_cond.shift(period)
             cond = c_cond
         elif strategy == "정석 정배열 (추세추종)":

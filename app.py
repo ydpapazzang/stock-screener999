@@ -140,23 +140,51 @@ with tabs[2]:
         st.write("---")
         st.subheader("🎯 조건 구성 (모든 조건 만족 시 포착)")
         
-        # 조건 입력 창
-        col1, col2, col3, col4, col5 = st.columns([2, 2, 2, 1, 2])
-        p_type = col1.selectbox("타입", ["N봉전", "N봉 이내"])
-        p_val = col2.selectbox("기간", [f"{i}봉" for i in range(11)])
-        a_val = col3.selectbox("비교 A", ["종가"] + [f"MA{i}" for i in range(1, 101)])
-        op_val = col4.selectbox("조건", [">=", "<=", ">", "<"])
-        b_val = col5.selectbox("비교 B", [f"MA{i}" for i in range(1, 366)], index=19)
+        c_tabs = st.tabs(["📈 이동평균 (MA)", "📊 RSI", "🔊 거래량"])
         
-        if st.button("➕ 조건 추가", use_container_width=True):
-            new_cond = {
-                "a": a_val, "b": b_val, 
-                "period": int(p_val.replace("봉", "")), 
-                "op": op_val,
-                "p_type": "ago" if p_type == "N봉전" else "within"
-            }
-            st.session_state.temp_conditions.append(new_cond)
-            st.toast("조건이 리스트에 추가되었습니다!")
+        with c_tabs[0]:
+            col1, col2, col3, col4, col5 = st.columns([2, 2, 2, 1, 2])
+            ma_p_type = col1.selectbox("타입", ["N봉전", "N봉 이내"], key="ma_pt")
+            ma_p_val = col2.selectbox("기간", [f"{i}봉" for i in range(11)], key="ma_pv")
+            ma_a = col3.selectbox("비교 A", ["종가"] + [f"MA{i}" for i in range(1, 101)], key="ma_a")
+            ma_op = col4.selectbox("조건", [">=", "<=", ">", "<"], key="ma_op")
+            ma_b = col5.selectbox("비교 B", [f"MA{i}" for i in range(1, 366)], index=19, key="ma_b")
+            if st.button("➕ MA 조건 추가", use_container_width=True):
+                st.session_state.temp_conditions.append({
+                    "a": ma_a, "b": ma_b, "op": ma_op, 
+                    "period": int(ma_p_val.replace("봉", "")), 
+                    "p_type": "ago" if ma_p_type == "N봉전" else "within"
+                })
+                st.toast("MA 조건 추가됨")
+
+        with c_tabs[1]:
+            col1, col2, col3, col4 = st.columns([2, 2, 1, 2])
+            rsi_p_type = col1.selectbox("타입", ["N봉전", "N봉 이내"], key="rsi_pt")
+            rsi_p_val = col2.selectbox("기간", [f"{i}봉" for i in range(11)], key="rsi_pv")
+            rsi_op = col3.selectbox("조건", [">=", "<=", ">", "<"], key="rsi_op")
+            rsi_val = col4.number_input("RSI 값", 0, 100, 30, key="rsi_val")
+            if st.button("➕ RSI 조건 추가", use_container_width=True):
+                st.session_state.temp_conditions.append({
+                    "a": "RSI", "b": str(rsi_val), "op": rsi_op,
+                    "period": int(rsi_p_val.replace("봉", "")),
+                    "p_type": "ago" if rsi_p_type == "N봉전" else "within"
+                })
+                st.toast("RSI 조건 추가됨")
+
+        with c_tabs[2]:
+            col1, col2, col3, col4, col5 = st.columns([2, 2, 1, 2, 1])
+            vol_p_type = col1.selectbox("타입", ["N봉전", "N봉 이내"], key="vol_pt")
+            vol_p_val = col2.selectbox("기간", [f"{i}봉" for i in range(11)], key="vol_pv")
+            vol_op = col3.selectbox("조건", [">=", "<=", ">", "<"], key="vol_op")
+            vol_base = col4.selectbox("비교 대상", ["VMA5", "VMA20", "VMA60"], key="vol_base")
+            vol_mult = col5.number_input("배수", 0.1, 10.0, 2.0, 0.1, key="vol_mult")
+            if st.button("➕ 거래량 조건 추가", use_container_width=True):
+                st.session_state.temp_conditions.append({
+                    "a": "거래량", "b": f"{vol_base} * {vol_mult}", "op": vol_op,
+                    "period": int(vol_p_val.replace("봉", "")),
+                    "p_type": "ago" if vol_p_type == "N봉전" else "within"
+                })
+                st.toast("거래량 조건 추가됨")
 
         # 현재 추가된 조건 리스트 표시
         if st.session_state.temp_conditions:
