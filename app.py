@@ -205,7 +205,8 @@ elif curr_tab == "🛠️ 전략 커스텀":
             for i, cd in enumerate(st.session_state.temp_conditions):
                 c1, c2 = st.columns([5, 1])
                 lbl = "봉전" if cd.get('p_type','ago')=='ago' else "봉이내"
-                c1.info(f"{cd['period']}{lbl} {cd['a']} {cd['op']} {cd['b']}")
+                disp_info = f" (이격도 {cd['disparity']}%)" if cd.get('disparity') else ""
+                c1.info(f"{cd['period']}{lbl} {cd['a']} {cd['op']} {cd['b']}{disp_info}")
                 if c2.button("❌", key=f"rm_{i}"): st.session_state.temp_conditions.pop(i); st.rerun()
             
             st.subheader("📊 전략 성과 검증")
