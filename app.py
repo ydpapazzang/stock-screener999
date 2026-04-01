@@ -240,15 +240,24 @@ elif curr_tab == "🛠️ 전략 커스텀":
     st.subheader("📋 내 커스텀 전략 목록")
     for i, cs in enumerate(config.get("custom_strategies", [])):
         with st.container(border=True):
-            col1, col2, col3 = st.columns([4, 1, 1])
+            col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
             cond_desc = " AND ".join([f"[{c['period']}{'봉전' if c.get('p_type','ago')=='ago' else '봉이내'} {c['a']} {c.get('op','>=')} {c['b']}]" for c in cs['conditions']])
             col1.write(f"### {cs['name']} ({cs['timeframe']})")
             col1.info(f"🔍 전체 조건: {cond_desc}")
-            if col2.button("📝 수정", key=f"edit_cs_{i}", use_container_width=True):
+            
+            if col2.button("📊 검증", key=f"bt_cs_{i}", use_container_width=True):
+                with st.spinner("분석 중..."):
+                    test_sym = "005930" if cs['timeframe'] != "월봉" else "AAPL"
+                    df_test = logic.get_processed_data(test_sym, 'D' if cs['timeframe']=="일봉" else ('W' if cs['timeframe']=="주봉" else 'M'))
+                    win, ret, cnt = logic.run_backtest(df_test, [cs['name']])
+                    st.toast(f"[{cs['name']}] 승률 {win}% | 수익 {ret}% ({cnt}회)")
+                    col1.success(f"📈 **1년 검증 성과:** 승률 **{win}%** | 평균수익 **{ret}%** ({cnt}회 포착)")
+            
+            if col3.button("📝 수정", key=f"edit_cs_{i}", use_container_width=True):
                 st.session_state.editing_idx = i
                 st.session_state.temp_conditions = cs['conditions'].copy()
                 st.rerun()
-            if col3.button("🗑️ 삭제", key=f"del_cs_{i}", use_container_width=True):
+            if col4.button("🗑️ 삭제", key=f"del_cs_{i}", use_container_width=True):
                 config["custom_strategies"].pop(i)
                 logic.save_config(config); logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4)); st.rerun()
 
