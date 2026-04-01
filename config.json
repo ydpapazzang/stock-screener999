@@ -15,6 +15,13 @@
             "freq": "\ub9e4\uc77c",
             "time": "06:00",
             "strategy": "\uc815\uc11d \uc815\ubc30\uc5f4 (\ucd94\uc138\ucd94\uc885)"
+        },
+        {
+            "id": "20c1e3f5",
+            "freq": "\ub9e4\uc77c",
+            "time": "06:00",
+            "strategy": "\uc6d4\ubd09 12\uc120 \ub3cc\ud30c",
+            "target": "KOSPI/KOSDAQ"
         }
     ],
     "password": "6666",
