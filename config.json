@@ -137,6 +137,20 @@
                     "disparity": 5.0
                 }
             ]
+        },
+        {
+            "name": "5555",
+            "timeframe": "\uc6d4\ubd09",
+            "conditions": [
+                {
+                    "a": "MA1",
+                    "b": "MA12",
+                    "op": ">",
+                    "period": 5,
+                    "p_type": "within",
+                    "disparity": 5.0
+                }
+            ]
         }
     ],
     "watchlist": [
