@@ -81,6 +81,40 @@
                     "p_type": "ago"
                 }
             ]
+        },
+        {
+            "name": "\ub20c\ub9bc\ubaa9 \uc804\ub7b5",
+            "timeframe": "\uc77c\ubd09",
+            "conditions": [
+                {
+                    "a": "\uc885\uac00",
+                    "b": "MA60",
+                    "op": ">",
+                    "period": 0,
+                    "p_type": "ago"
+                },
+                {
+                    "a": "\uc885\uac00",
+                    "b": "MA20",
+                    "op": "<=",
+                    "period": 1,
+                    "p_type": "ago"
+                },
+                {
+                    "a": "\uc885\uac00",
+                    "b": "MA20",
+                    "op": ">",
+                    "period": 0,
+                    "p_type": "ago"
+                },
+                {
+                    "a": "\uac70\ub798\ub7c9",
+                    "b": "VMA20 * 1.2",
+                    "op": ">",
+                    "period": 0,
+                    "p_type": "ago"
+                }
+            ]
         }
     ],
     "watchlist": [
