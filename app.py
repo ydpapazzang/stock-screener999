@@ -58,7 +58,11 @@ with st.sidebar:
 if st.session_state["scanning"]:
     df_l = logic.get_listing_data(target)
     if not df_l.empty:
-        if '시총(억)' in df_l.columns and "ETF" not in target: df_l = df_l[df_l['시총(억)'] >= min_cap]
+        # ETF 시장인 경우 시총 필터를 무시하고 전수 조사
+        is_etf = "ETF" in target
+        if '시총(억)' in df_l.columns and not is_etf:
+            df_l = df_l[df_l['시총(억)'] >= min_cap]
+        
         targets = df_l.head(limit)
         results = []
         with st.spinner(f"🚀 {len(targets)}개 분석 중..."):
