@@ -1,4 +1,4 @@
-# VERSION: 1.1.2 (Universal Global Search Fix)
+# VERSION: 1.1.3 (Advanced Analytics)
 import FinanceDataReader as fdr
 import pandas as pd
 import numpy as np
@@ -37,44 +37,6 @@ def get_secret(key, default=None):
     except: pass
     return os.environ.get(key, default)
 
-@st.cache_data(ttl=86400) # 24시간 캐싱
-def get_searchable_list():
-    """한국/미국 주식 및 ETF 전체 리스트 통합 생성"""
-    final_list = []
-    
-    # 1. 한국 시장 (주식 전체 KOSPI/KOSDAQ/KONEX)
-    try:
-        df_krx = fdr.StockListing('KRX')[['Symbol', 'Name']]
-        for r in df_krx.itertuples():
-            final_list.append(f"{r.Name} ({r.Symbol})")
-            
-        # 2. 한국 ETF (종목코드 305540 등 포함 보장)
-        df_kr_etf = fdr.StockListing('ETF/KR')[['Symbol', 'Name']]
-        for r in df_kr_etf.itertuples():
-            final_list.append(f"[ETF] {r.Name} ({r.Symbol})")
-    except Exception as e:
-        print(f"KR Search List Error: {e}")
-
-    # 3. 미국 시장 (NASDAQ + NYSE + ETF)
-    try:
-        # 나스닥 주요 종목 (더 많은 범위 확보)
-        df_nas = fdr.StockListing('NASDAQ')[['Symbol', 'Name']]
-        final_list += [f"{r.Name} ({r.Symbol})" for r in df_nas.itertuples()[:3000]]
-        # NYSE
-        df_nyse = fdr.StockListing('NYSE')[['Symbol', 'Name']]
-        final_list += [f"{r.Name} ({r.Symbol})" for r in df_nyse.itertuples()[:2000]]
-        # 미국 ETF
-        df_us_etf = fdr.StockListing('ETF/US')[['Symbol', 'Name']]
-        final_list += [f"[US ETF] {r.Name} ({r.Symbol})" for r in df_us_etf.itertuples()[:1000]]
-    except Exception as e:
-        print(f"US Search List Error: {e}")
-
-    if not final_list:
-        return ["삼성전자 (005930)", "SK하이닉스 (000660)", "Apple (AAPL)", "NVIDIA (NVDA)", "Tesla (TSLA)"]
-    
-    # 중복 제거 및 정렬
-    return sorted(list(set(final_list)))
-
 @st.cache_data(ttl=3600)
 def get_listing_data(target):
     try:
@@ -88,21 +50,35 @@ def get_listing_data(target):
         return df[['Symbol', 'Name', '시총(억)']]
     except: return pd.DataFrame()
 
+@st.cache_data(ttl=86400)
+def get_searchable_list():
+    final_list = []
+    try:
+        df_krx = fdr.StockListing('KRX')[['Symbol', 'Name']]
+        final_list += [f"{r.Name} ({r.Symbol})" for r in df_krx.itertuples()]
+        df_kr_etf = fdr.StockListing('ETF/KR')[['Symbol', 'Name']]
+        final_list += [f"[ETF] {r.Name} ({r.Symbol})" for r in df_kr_etf.itertuples()]
+    except: pass
+    try:
+        df_nas = fdr.StockListing('NASDAQ')[['Symbol', 'Name']]
+        final_list += [f"{r.Name} ({r.Symbol})" for r in df_nas.itertuples()[:2000]]
+        df_us_etf = fdr.StockListing('ETF/US')[['Symbol', 'Name']]
+        final_list += [f"[US ETF] {r.Name} ({r.Symbol})" for r in df_us_etf.itertuples()[:500]]
+    except: pass
+    return sorted(list(set(final_list))) if final_list else ["삼성전자 (005930)"]
+
 @st.cache_data(ttl=1800)
 def get_processed_data(symbol, period='D'):
     try:
         sym_str = str(symbol)
         is_kr = sym_str.isdigit() and len(sym_str) == 6
         yf_sym = f"{sym_str}.KS" if is_kr and int(sym_str) < 900000 else (f"{sym_str}.KQ" if is_kr else sym_str)
-        
         ticker = yf.Ticker(yf_sym)
         df = ticker.history(period="5y", interval="1d")
         if df.empty: return None
-        
         df.index = pd.to_datetime(df.index).tz_localize(None)
         if period == 'M': df = df.resample('ME').agg({'Open':'first','High':'max','Low':'min','Close':'last','Volume':'sum'})
         elif period == 'W': df = df.resample('W').agg({'Open':'first','High':'max','Low':'min','Close':'last','Volume':'sum'})
-        
         for n in [5, 10, 20, 60, 120]: df[f'ma{n}'] = df['Close'].rolling(n, min_periods=1).mean()
         df['vol_ma5'] = df['Volume'].rolling(5, min_periods=1).mean()
         delta = df['Close'].diff()
@@ -143,16 +119,10 @@ def check_multi_signals(df, strategy_list):
                 if op == ">=": res = (v_a >= v_b)
                 elif op == "<=": res = (v_a <= v_b)
                 elif op == ">": res = (v_a > v_b)
-                elif op == "<": res = (v_a < v_b)
-                else: res = (v_a >= v_b)
-
-                # 이격도 필터링 추가 (Max Disparity %)
+                else: res = (v_a < v_b)
                 disp_val = cond.get('disparity')
                 if disp_val is not None and disp_val > 0:
-                    # |(A/B - 1) * 100| <= disp_val
-                    disparity_calc = abs((v_a / v_b - 1) * 100)
-                    res &= (disparity_calc <= float(disp_val))
-
+                    res &= (abs((v_a / v_b - 1) * 100) <= float(disp_val))
                 if cond.get('p_type') == "within": c_cond &= res.rolling(int(cond['period'])+1, min_periods=1).max().fillna(0).astype(bool)
                 else: c_cond &= res.shift(int(cond['period'])).fillna(False)
             cond_res = c_cond
@@ -165,15 +135,19 @@ def check_multi_signals(df, strategy_list):
 def run_backtest(df, strategy_list):
     try:
         sig = check_multi_signals(df, strategy_list)
-        res, in_pos, buy_p = [], False, 0
+        results = []
+        in_pos, buy_p = False, 0
         for i in range(1, len(df)):
             if not in_pos and sig.iloc[i] and not sig.iloc[i-1]: buy_p, in_pos = df.iloc[i]['Close'], True
             elif in_pos and (not sig.iloc[i] or i == len(df)-1):
-                res.append((df.iloc[i]['Close']/buy_p - 1)*100); in_pos = False
-        if not res: return 0, 0, 0
-        win = len([r for r in res if r>0])/len(res)*100
-        return round(win, 1), round(sum(res)/len(res), 2), len(res)
-    except: return 0, 0, 0
+                results.append((df.iloc[i]['Close']/buy_p - 1)*100); in_pos = False
+        if not results: return 0, 0, 0, 0
+        wins = [r for r in results if r > 0]; losses = [r for r in results if r <= 0]
+        win_rate = len(wins) / len(results) * 100
+        avg_win = sum(wins)/len(wins) if wins else 0; avg_loss = sum(losses)/len(losses) if losses else 0
+        ev = (win_rate/100 * avg_win) + ((1 - win_rate/100) * avg_loss)
+        return round(win_rate, 1), round(sum(results)/len(results), 2), len(results), round(ev, 2)
+    except: return 0, 0, 0, 0
 
 def send_telegram_all(token, chat_id, results, strategy_names, target_type):
     if not token or not chat_id: return False
@@ -194,10 +168,8 @@ def send_telegram_with_chart(token, chat_id, symbol, name, df, strategy_names):
         fig, ax = plt.subplots(figsize=(8, 4.5))
         ax.plot(df_p.index, df_p['Close'], label='Price', color='white', linewidth=1.5)
         if 'ma20' in df_p.columns: ax.plot(df_p.index, df_p['ma20'], label='MA20', color='yellow', linewidth=1, alpha=0.8)
-        if 'ma60' in df_p.columns: ax.plot(df_p.index, df_p['ma60'], label='MA60', color='orange', linewidth=1, alpha=0.8)
         ax.set_title(f"🚀 {name} ({symbol})", fontsize=12, color='cyan')
-        ax.legend(loc='best', fontsize=8); ax.grid(True, alpha=0.2)
-        plt.tight_layout()
+        ax.legend(loc='best', fontsize=8); plt.tight_layout()
         buf = io.BytesIO(); plt.savefig(buf, format='png', dpi=100); plt.close(fig); buf.seek(0)
         cap = f"🚀 <b>{name} ({symbol})</b>\n🎯 {', '.join(strategy_names)}\n💰 현재가: {df.iloc[-1]['Close']:,.2f}"
         return requests.post(f"https://api.telegram.org/bot{token}/sendPhoto", files={'photo': buf}, data={'chat_id':chat_id, 'caption':cap, 'parse_mode':'HTML'}, timeout=30).status_code == 200
@@ -210,9 +182,8 @@ def get_external_link(symbol):
 
 def get_dividend_details(symbol):
     try:
-        sym_str = str(symbol)
-        is_kr = sym_str.isdigit() and len(sym_str) == 6
-        yf_sym = f"{sym_str}.KS" if is_kr and int(sym_str) < 900000 else (f"{sym_str}.KQ" if is_kr else sym_str)
+        is_kr = str(symbol).isdigit() and len(str(symbol)) == 6
+        yf_sym = f"{symbol}.KS" if is_kr and int(symbol) < 900000 else (f"{symbol}.KQ" if is_kr else symbol)
         t = yf.Ticker(yf_sym); i = t.info; h = t.dividends
         m = sorted(list(set(h.tail(8).index.month))) if not h.empty else []
         return {"name": i.get('shortName', symbol), "dps": i.get('dividendRate', 0) or 0, "yield": round((i.get('dividendYield', 0) or 0)*100, 2), "currency": i.get('currency', 'KRW'), "payout": round(i.get('payoutRatio', 0)*100, 1), "months": m}
@@ -225,9 +196,11 @@ def process_stock_multi_worker(symbol, name, strategy_list, period_key):
             sig = check_multi_signals(df, strategy_list)
             if sig.iloc[-1]:
                 df_3y = df.tail(252*3) if period_key=='D' else (df.tail(52*3) if period_key=='W' else df.tail(12*3))
-                win, ret, cnt = run_backtest(df_3y, strategy_list)
+                win, avg_ret, cnt, ev = run_backtest(df_3y, strategy_list)
+                curr_p = df.iloc[-1]['Close']
+                target_p = curr_p * (1 + avg_ret/100)
                 status = "🚀 최초진입" if not sig.iloc[-2] else "📈 추세유지"
-                return {"코드": symbol, "종목명": name, "현재가": f"{df.iloc[-1]['Close']:,.2f}", "상태": status, "승률": f"{win}%", "수익률": f"{ret}%", "일치전략": ", ".join(strategy_list)}
+                return {"코드": symbol, "종목명": name, "현재가": f"{curr_p:,.2f}" if not str(symbol).isdigit() else f"{int(curr_p):,}", "상태": status, "승률": f"{win}%", "기대수익": f"{avg_ret}%", "기대값(EV)": f"{ev}%", "목표가": f"{target_p:,.2f}" if not str(symbol).isdigit() else f"{int(target_p):,}", "일치전략": ", ".join(strategy_list)}
     except: pass
     return None
 
