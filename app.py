@@ -241,20 +241,33 @@ elif curr_tab == "🛠️ 전략 커스텀":
     c1.subheader("📋 내 커스텀 전략 목록")
     if config.get("custom_strategies"):
         if c2.button("📊 전체 일괄 검증", use_container_width=True, type="primary"):
-            with st.spinner("모든 전략 검증 중..."):
+            with st.spinner("모든 전략 검증 중 (최근 3년)..."):
                 all_results = []
                 for cs in config["custom_strategies"]:
+                    # 검증 종목명 명시
                     test_sym = "005930" if cs['timeframe'] != "월봉" else "AAPL"
+                    test_name = "삼성전자" if test_sym == "005930" else "Apple"
+                    
                     df_test = logic.get_processed_data(test_sym, 'D' if cs['timeframe']=="일봉" else ('W' if cs['timeframe']=="주봉" else 'M'))
-                    win, ret, cnt = logic.run_backtest(df_test, [cs['name']])
-                    all_results.append({"전략명": cs['name'], "승률": f"{win}%", "평균수익": f"{ret}%", "횟수": f"{cnt}회"})
+                    # 3년치로 슬라이싱 (10년 로드하므로 뒤에서부터 약 750봉(일봉기준))
+                    df_test_3y = df_test.tail(252 * 3) if cs['timeframe']=="일봉" else (df_test.tail(52 * 3) if cs['timeframe']=="주봉" else df_test.tail(12 * 3))
+                    
+                    win, ret, cnt = logic.run_backtest(df_test_3y, [cs['name']])
+                    all_results.append({
+                        "전략명": cs['name'], 
+                        "검증종목": test_name,
+                        "승률": f"{win}%", 
+                        "평균수익": f"{ret}%", 
+                        "포착횟수": f"{cnt}회"
+                    })
                 st.session_state["all_backtest_results"] = all_results
-                st.success("모든 전략 검증 완료!")
+                st.success("모든 전략 검증 완료 (최근 3년)!")
 
     if "all_backtest_results" in st.session_state:
-        with st.expander("📈 일괄 검증 결과 리포트 (최근 1년)", expanded=True):
+        with st.expander("📈 일괄 검증 리포트 (최근 3년 기준)", expanded=True):
+            st.info("💡 검증 기준: 전략이 TRUE일 때 매수, FALSE가 될 때 매도했을 때의 성과입니다.")
             st.table(pd.DataFrame(st.session_state["all_backtest_results"]))
-            if st.button("닫기"): del st.session_state["all_backtest_results"]; st.rerun()
+            if st.button("결과 닫기"): del st.session_state["all_backtest_results"]; st.rerun()
 
     for i, cs in enumerate(config.get("custom_strategies", [])):
         with st.container(border=True):

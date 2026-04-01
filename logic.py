@@ -116,18 +116,16 @@ def send_telegram_with_chart(token, chat_id, symbol, name, df, strategy_names):
 
 def get_processed_data(symbol, period='M'):
     try:
-        # KR/US 접미사 보정 (yfinance 호환성)
+        # KR/US 접미사 보정
         is_kr = symbol.isdigit() and len(symbol) == 6
         yf_sym = symbol
         if is_kr:
             yf_sym = f"{symbol}.KS" if int(symbol) < 900000 else f"{symbol}.KQ"
             
-        if period == 'M': days = 365*15
-        elif period == 'W': days = 365*7
-        else: days = 365*2
-        
+        # 3년 검증을 위해 넉넉히 5년치(MA365 고려) 데이터 로드
+        days = 365*10 
         start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
-        # fdr 대신 yfinance로 통일 (미국주식 안정성 및 차트 데이터 위해)
+        
         ticker = yf.Ticker(yf_sym)
         df = ticker.history(start=start_date, interval='1d')
         
