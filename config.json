@@ -92,6 +92,19 @@
                     "p_type": "within"
                 }
             ]
+        },
+        {
+            "name": "\uc77c\ubd09 120",
+            "timeframe": "\uc77c\ubd09",
+            "conditions": [
+                {
+                    "a": "\uc885\uac00",
+                    "b": "MA120",
+                    "op": "<=",
+                    "period": 5,
+                    "p_type": "within"
+                }
+            ]
         }
     ]
 }
