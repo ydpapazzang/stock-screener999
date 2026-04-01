@@ -54,32 +54,47 @@ with st.sidebar:
             st.button("⏳ 종목 분석 중...", disabled=True, use_container_width=True)
         else:
             if st.button("🔍 즉시 스캔 실행", use_container_width=True, type="primary"):
+                # 즉시 그리드 초기화
+                st.session_state['last_results'] = pd.DataFrame()
+                st.session_state['last_query_strats'] = ""
                 st.session_state["scanning"] = True
                 st.rerun()
     else:
         st.error("🔒 보안 접속이 필요합니다.")
         st.button("🔍 즉시 스캔 실행 (잠김)", disabled=True, use_container_width=True)
 
-# --- [2.5] 실제 스캔 로직 실행 (상태가 True인 경우) ---
+# --- [2.5] 실제 스캔 로직 실행 ---
 if st.session_state["scanning"]:
     df_list = logic.get_listing_data(target)
     if not df_list.empty:
-        if target == "주식":
-            df_list = df_list[df_list.get('시총(억)', 0) >= min_cap]
+        # 시총 필터링 (컬럼 존재 시)
+        if '시총(억)' in df_list.columns and target != "미국 ETF":
+            df_list = df_list[df_list['시총(억)'] >= min_cap]
+        
+        # 종목 코드 컬럼 찾기 (Symbol 또는 티커 등)
+        sym_col = 'Symbol' if 'Symbol' in df_list.columns else df_list.columns[0]
+        name_col = 'Name' if 'Name' in df_list.columns else sym_col
+        
         targets = df_list.head(limit)
         results = []
-        with st.spinner(f"🚀 {len(targets)}개 종목 분석 중..."):
+        with st.spinner(f"🚀 {target} {len(targets)}개 종목 분석 중..."):
             with ThreadPoolExecutor(max_workers=10) as exe:
-                futures = {exe.submit(logic.process_stock_multi_worker, r.Symbol, r.Name, sel_strats, period): r for r in targets.itertuples()}
+                futures = {exe.submit(logic.process_stock_multi_worker, getattr(r, sym_col), getattr(r, name_col), sel_strats, period): r for r in targets.itertuples()}
                 for f in as_completed(futures):
                     res = f.result()
                     if res: results.append(res)
         
-        st.session_state['last_results'] = pd.DataFrame(results).sort_values(by=["점수"], ascending=False) if results else pd.DataFrame()
-        st.session_state['last_query_strats'] = ", ".join(sel_strats)
+        if results:
+            st.session_state['last_results'] = pd.DataFrame(results).sort_values(by=["점수"], ascending=False)
+            st.session_state['last_query_strats'] = ", ".join(sel_strats)
+        else:
+            st.session_state['last_results'] = pd.DataFrame() # 결과 없음 명시적 빈 값
+            st.session_state['last_query_strats'] = f"{', '.join(sel_strats)} (포착된 종목 없음)"
+            st.warning("⚠️ 선택하신 조건에 맞는 종목이 해당 시장에 없습니다.")
+            
         st.session_state["active_tab_idx"] = 0 # 결과 탭으로 이동
     
-    st.session_state["scanning"] = False # 상태 해제
+    st.session_state["scanning"] = False
     st.rerun()
 
 if not st.session_state["authenticated"]:
