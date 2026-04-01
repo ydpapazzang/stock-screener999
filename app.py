@@ -44,8 +44,8 @@ with st.sidebar:
     sel_labels = st.multiselect("전략 선택", all_options, default=[all_options[0]] if all_options else [])
     sel_strats = [s.replace("🔴 ", "") for s in sel_labels]
     
-    target = st.radio("대상", ["주식", "ETF"])
-    min_cap = st.slider("최소 시총 (억)", 0, 5000, 500, 100) if target=="주식" else 0
+    target = st.radio("대상", ["KOSPI/KOSDAQ", "한국 ETF", "미국 나스닥", "미국 ETF"])
+    min_cap = st.slider("최소 시총 (억)", 0, 10000, 500, 100, help="미국 주식은 대략적인 원화 환산 기준")
     limit = st.slider("최대 분석 수", 10, 500, 100)
     
     st.divider()

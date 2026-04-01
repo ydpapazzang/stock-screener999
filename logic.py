@@ -176,25 +176,58 @@ def get_fundamental_dividend(symbol):
     except: return False, 0
 
 def process_stock_multi_worker(symbol, name, strategy_list, period_key):
+    # KR/US 구분 (숫자 6자리면 한국, 아니면 미국으로 일단 간주)
+    is_kr = symbol.isdigit() and len(symbol) == 6
+    
     df_data = get_processed_data(symbol, period_key)
     if df_data is not None and len(df_data) >= 2:
         if not check_multi_signals(df_data, strategy_list).iloc[-1]: return None
+        
         div_info = ""
         if "꾸준한 배당주" in strategy_list:
-            is_good_div, yield_val = get_fundamental_dividend(symbol)
+            yf_sym = f"{symbol}.KS" if is_kr and int(symbol) < 900000 else (f"{symbol}.KQ" if is_kr else symbol)
+            is_good_div, yield_val = get_fundamental_dividend(yf_sym)
             if not is_good_div: return None
             div_info = f" (수익률: {yield_val}%)"
+            
         curr = df_data.iloc[-1]
         return {
-            "코드": symbol, "종목명": name + div_info, "점수": 100, "현재가": f"{int(curr['Close']):,}",
+            "코드": symbol, "종목명": name + div_info, "점수": 100, 
+            "현재가": f"{curr['Close']:,.2f}" if not is_kr else f"{int(curr['Close']):,}",
             "승률": "N/A", "평균수익": "N/A", "신규감지": "Y" if not check_multi_signals(df_data, strategy_list).iloc[-2] else "N",
             "일치전략": ", ".join(strategy_list)
         }
     return None
 
+def get_listing_data(target):
+    try:
+        if target == "한국 ETF": market = 'ETF/KR'
+        elif target == "미국 나스닥": market = 'NASDAQ'
+        elif target == "미국 ETF": market = 'ETF/US'
+        else: market = 'KRX' 
+        
+        df = fdr.StockListing(market)
+        df = df.rename(columns={'Code': 'Symbol', 'Marcap': '시가총액', 'Amount': '거래대금'})
+        
+        if '시가총액' in df.columns: 
+            df['시총(억)'] = (df['시가총액'] / 100000000).round(0)
+        if '거래대금' in df.columns: 
+            df['거래대금(억)'] = (df['거래대금'] / 100000000).round(0)
+            
+        # 미국 시장 시총 보정 (MarketCap 컬럼이 있는 경우)
+        if target in ["미국 나스닥", "미국 ETF"]:
+            if 'MarketCap' in df.columns:
+                df['시총(억)'] = (df['MarketCap'] * 1350 / 100000000).round(0)
+            elif '시총(억)' not in df.columns:
+                df['시총(억)'] = 0
+                
+        return df
+    except: return pd.DataFrame()
+
 def get_dividend_details(symbol):
     try:
-        yf_sym = f"{symbol}.KS" if symbol.isdigit() and int(symbol) < 900000 else (f"{symbol}.KQ" if symbol.isdigit() else symbol)
+        is_kr = symbol.isdigit() and len(symbol) == 6
+        yf_sym = f"{symbol}.KS" if is_kr and int(symbol) < 900000 else (f"{symbol}.KQ" if is_kr else symbol)
         ticker = yf.Ticker(yf_sym)
         info = ticker.info
         dps = info.get('trailingAnnualDividendRate', 0) or info.get('dividendRate', 0) or 0
