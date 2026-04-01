@@ -18,16 +18,20 @@ st.set_page_config(page_title="Strategic Screener Pro", layout="wide", page_icon
 config = logic.load_config()
 
 # 세션 상태 초기화
-for k, v in {"authenticated":False, "active_tab_idx":0, "scanning":False, "temp_conditions":[], "editing_idx":None}.items():
-    if k not in st.session_state: st.session_state[k] = v
+if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
+if "active_tab_idx" not in st.session_state: st.session_state["active_tab_idx"] = 0
+if "scanning" not in st.session_state: st.session_state["scanning"] = False
+if "temp_conditions" not in st.session_state: st.session_state["temp_conditions"] = []
+if "editing_idx" not in st.session_state: st.session_state["editing_idx"] = None
 
 # --- [1] 사이드바 ---
 with st.sidebar:
     st.title("🎯 전역 컨트롤")
     cat = st.selectbox("분석 단위", ["일봉 전략", "주봉 전략", "월봉 전략"])
-    period = 'D' if "일봉" in cat else ('W' if "주봉" in category if 'category' in locals() else 'M')
-    # Local variable check fix
-    period = 'D' if "일봉" in cat else ('W' if "주봉" in cat else 'M')
+    # 주기 결정 (일봉='D', 주봉='W', 월봉='M')
+    if "일봉" in cat: period = 'D'
+    elif "주봉" in cat: period = 'W'
+    else: period = 'M'
     
     custom_list = [f"🔴 {s['name']}" for s in config.get('custom_strategies', []) if s.get('timeframe') == cat[:2]]
     base_options = ["정석 정배열 (추세추종)", "거래량 폭발 (세력개입)", "5일 연속 상승세", "외인/기관 쌍끌이 매수", "꾸준한 배당주"]
@@ -48,7 +52,7 @@ with st.sidebar:
                 st.session_state["scanning"] = True; st.rerun()
     else: st.error("🔒 보안 접속 필요")
 
-# --- [1.5] 스캔 로직 ---
+# --- [1.5] 스캔 로직 실행 ---
 if st.session_state["scanning"]:
     df_l = pd.DataFrame(config.get('watchlist', [])) if target == "⭐ 관심종목" else logic.get_listing_data(target)
     if not df_l.empty:
@@ -66,19 +70,21 @@ if st.session_state["scanning"]:
         st.session_state["active_tab_idx"] = 0
     st.session_state["scanning"] = False; st.rerun()
 
+# --- [2] 보안 접속 화면 ---
 if not st.session_state["authenticated"]:
     st.title("🔒 보안 접속")
-    if st.text_input("비밀번호", type="password") == ACCESS_PW:
-        st.session_state["authenticated"] = True; st.rerun()
+    pw_in = st.text_input("비밀번호", type="password")
+    if st.button("접속") or (pw_in == ACCESS_PW): 
+        if pw_in == ACCESS_PW: st.session_state["authenticated"] = True; st.rerun()
     st.stop()
 
-# --- [2] 메인 UI ---
+# --- [3] 메인 UI (내비게이션) ---
 menu = ["🚀 전략 스캔", "⭐ 관심종목", "📅 알림 설정", "🛠️ 전략 커스텀", "💰 배당 계산기", "⚙️ 시스템"]
 sel_menu = st.segmented_control("메뉴", menu, selection_mode="single", default=menu[st.session_state["active_tab_idx"]])
 if sel_menu: st.session_state["active_tab_idx"] = menu.index(sel_menu)
-curr = menu[st.session_state["active_tab_idx"]]
+curr_tab = menu[st.session_state["active_tab_idx"]]
 
-if curr == "🚀 전략 스캔":
+if curr_tab == "🚀 전략 스캔":
     if 'last_results' in st.session_state:
         df = st.session_state['last_results']
         if not df.empty:
@@ -86,36 +92,35 @@ if curr == "🚀 전략 스캔":
             df_d = df.copy(); df_d.index = range(1, len(df)+1)
             st.dataframe(df_d, use_container_width=True)
             c1, c2 = st.columns([2, 1])
-            sel = c1.selectbox("상세 분석", df['종목명'].tolist())
-            if sel:
-                row = df[df['종목명']==sel].iloc[0]
+            sel_s = c1.selectbox("상세 분석", df['종목명'].tolist())
+            if sel_s:
+                row = df[df['종목명']==sel_s].iloc[0]
                 links = logic.get_external_link(row['코드'])
                 with c2:
                     st.write("🔗 **외부 링크**")
                     cols = st.columns(len(links))
-                    for i, (site, url) in enumerate(links.items()): cols[i].link_button(site, url)
+                    for idx, (site, url) in enumerate(links.items()): cols[idx].link_button(site, url)
                 df_c = logic.get_processed_data(row['코드'], period)
-                if df_c is not None: st.plotly_chart(logic.create_advanced_chart(df_c, sel, sel_strats))
+                if df_c is not None: st.plotly_chart(logic.create_advanced_chart(df_c, sel_s, sel_strats))
         else: st.warning("포착된 종목이 없습니다.")
     else: st.info("사이드바에서 [즉시 스캔 실행] 버튼을 눌러주세요.")
 
-elif curr == "⭐ 관심종목":
+elif curr_tab == "⭐ 관심종목":
     st.title("⭐ 관심종목 관리")
     if "watchlist" not in config: config["watchlist"] = []
     with st.expander("➕ 관심종목 추가", expanded=True):
         col1, col2 = st.columns([3, 1])
         if "full_list" not in st.session_state: st.session_state.full_list = logic.get_searchable_list()
-        new = col1.selectbox("종목 선택", st.session_state.full_list, index=None)
-        if col2.button("추가") and new:
-            import re
-            sym = re.search(r'\((.*?)\)', new).group(1); name = new.split(" (")[0]
+        new_s = col1.selectbox("종목 선택", st.session_state.full_list, index=None)
+        if col2.button("추가") and new_s:
+            sym = re.search(r'\((.*?)\)', new_s).group(1); name = new_s.split(" (")[0]
             if not any(x['Symbol'] == sym for x in config['watchlist']):
                 config['watchlist'].append({"Symbol": sym, "Name": name}); logic.save_config(config); st.rerun()
     if config['watchlist']:
-        df_w = pd.DataFrame(config['watchlist']); df_w.index += 1; st.dataframe(df_w, use_container_width=True)
+        df_w = pd.DataFrame(config['watchlist']); df_w.index = range(1, len(df_w)+1); st.dataframe(df_w, use_container_width=True)
         if st.button("🗑️ 전체 삭제"): config['watchlist'] = []; logic.save_config(config); st.rerun()
 
-elif curr == "📅 알림 설정":
+elif curr_tab == "📅 알림 설정":
     st.title("📅 자동 알림 스케줄")
     with st.expander("➕ 새 알림 추가"):
         f = st.selectbox("주기", ["매일", "매주 (월요일)", "매월 (1일)"])
@@ -130,7 +135,7 @@ elif curr == "📅 알림 설정":
             c1.write(f"### {s['freq']} | {s['strategy']}")
             if c2.button("📡 발송", key=f"snd_{s['id']}"):
                 with st.spinner("발송 중..."):
-                    targets = logic.get_listing_data("KOSPI/KOSDAQ").head(30)
+                    targets = logic.get_listing_data("KOSPI/KOSDAQ").head(20)
                     for r in targets.itertuples():
                         df_d = logic.get_processed_data(r.Symbol, 'D')
                         if df_d is not None and logic.check_multi_signals(df_d, [s['strategy']]).iloc[-1]:
@@ -139,7 +144,7 @@ elif curr == "📅 알림 설정":
             if c3.button("🗑️ 삭제", key=f"del_{s['id']}"):
                 config['schedules'].pop(i); logic.save_config(config); logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4)); st.rerun()
 
-elif curr == "🛠️ 전략 커스텀":
+elif curr_tab == "🛠️ 전략 커스텀":
     st.title("🛠️ 나만의 전략 커스텀")
     if "custom_strategies" not in config: config["custom_strategies"] = []
     is_edit = st.session_state.editing_idx is not None
@@ -189,16 +194,16 @@ elif curr == "🛠️ 전략 커스텀":
                 if c2.button("❌", key=f"rm_{i}"): st.session_state.temp_conditions.pop(i); st.rerun()
             
             st.subheader("📊 전략 성과 검증")
-            test_stocks = ["삼성전자 (005930)", "SK하이닉스 (000660)", "KODEX 200 (069500)", "NVIDIA (NVDA)", "Apple (AAPL)", "TSLA (TSLA)", "QQQ"]
-            sel_test = st.selectbox("검증 종목 선택", test_stocks)
-            t_ticker = re.search(r'\((.*?)\)', sel_test).group(1) if "(" in sel_test else sel_test
+            t_stocks = ["삼성전자 (005930)", "SK하이닉스 (000660)", "KODEX 200 (069500)", "NVIDIA (NVDA)", "Apple (AAPL)", "TSLA (TSLA)", "QQQ"]
+            sel_t = st.selectbox("검증 종목 선택", t_stocks)
+            t_tick = re.search(r'\((.*?)\)', sel_t).group(1) if "(" in sel_t else sel_t
             
             b1, b2, b3 = st.columns([2, 2, 1])
-            if b1.button(f"📊 {sel_test} 검증 (3년)", use_container_width=True):
+            if b1.button(f"📊 {sel_t} 검증 (3년)", use_container_width=True):
                 with st.spinner("분석 중..."):
-                    df_t = logic.get_processed_data(t_ticker, period)
-                    win, ret, cnt = logic.run_backtest(df_t, [c_name if c_name else "임시"])
-                    st.metric(f"성과 ({sel_test})", f"승률 {win}%", f"수익 {ret}%")
+                    df_bt = logic.get_processed_data(t_tick, period)
+                    win, ret, cnt = logic.run_backtest(df_bt, [c_name if c_name else "임시"])
+                    st.metric(f"성과 ({sel_t})", f"승률 {win}%", f"수익 {ret}%")
                     st.info(f"3년간 총 {cnt}회 포착됨")
             if b2.button("💾 전략 저장", type="primary", use_container_width=True):
                 new_s = {"name":c_name, "timeframe":c_unit, "conditions":st.session_state.temp_conditions.copy()}
@@ -212,15 +217,15 @@ elif curr == "🛠️ 전략 커스텀":
     st.write("---")
     c1, c2, c3 = st.columns([3, 2, 1])
     c1.subheader("📋 내 커스텀 전략 목록")
-    sel_batch = c2.selectbox("일괄 검증 종목", ["삼성전자 (005930)", "SK하이닉스 (000660)", "QQQ", "NVDA", "AAPL"], key="batch_stock")
-    batch_ticker = re.search(r'\((.*?)\)', sel_batch).group(1) if "(" in sel_batch else sel_batch
+    sel_bt = c2.selectbox("일괄 검증 종목", ["삼성전자 (005930)", "SK하이닉스 (000660)", "QQQ", "NVDA", "AAPL"], key="batch_stock")
+    bt_tick = re.search(r'\((.*?)\)', sel_bt).group(1) if "(" in sel_bt else sel_bt
     
     if config.get("custom_strategies") and c3.button("📊 일괄 검증", type="primary", use_container_width=True):
         with st.spinner("모든 전략 분석 중..."):
             all_r = []
-            df_batch = logic.get_processed_data(batch_ticker, period)
+            df_bt_full = logic.get_processed_data(bt_tick, period)
             for cs in config["custom_strategies"]:
-                win, ret, cnt = logic.run_backtest(df_batch, [cs['name']])
+                win, ret, cnt = logic.run_backtest(df_bt_full, [cs['name']])
                 all_r.append({"전략명":cs['name'], "승률":f"{win}%", "수익":f"{ret}%", "횟수":f"{cnt}회"})
             st.session_state["all_bt"] = all_r
     if "all_bt" in st.session_state:
@@ -231,10 +236,10 @@ elif curr == "🛠️ 전략 커스텀":
             col1, col2, col3 = st.columns([4, 1, 1])
             col1.write(f"### {cs['name']} ({cs['timeframe']})")
             col1.caption(" & ".join([f"[{c['period']}봉전 {c['a']} {c.get('op','>=')} {c['b']}]" for c in cs['conditions']]))
-            if col2.button("📝 수정", key=f"e_{i}"): st.session_state.editing_idx = i; st.session_state.temp_conditions = cs['conditions'].copy(); st.rerun()
-            if col3.button("🗑️ 삭제", key=f"d_{i}"): config["custom_strategies"].pop(i); logic.save_config(config); st.rerun()
+            if col2.button("📝 수정", key=f"edit_{i}"): st.session_state.editing_idx = i; st.session_state.temp_conditions = cs['conditions'].copy(); st.rerun()
+            if col3.button("🗑️ 삭제", key=f"del_{i}"): config["custom_strategies"].pop(i); logic.save_config(config); st.rerun()
 
-elif curr == "💰 배당 계산기":
+elif curr_tab == "💰 배당 계산기":
     st.title("💰 배당금 계산기")
     if "portfolio" not in st.session_state: st.session_state.portfolio = []
     with st.expander("➕ 보유 종목 추가", expanded=True):
@@ -244,7 +249,6 @@ elif curr == "💰 배당 계산기":
         qty = c2.number_input("수량", min_value=1, value=10)
         price = c3.number_input("평균단가", min_value=0.0, value=50000.0)
         if st.button("추가") and selected:
-            import re
             sym = re.search(r'\((.*?)\)', selected).group(1)
             det = logic.get_dividend_details(sym)
             if det: det.update({"qty": qty, "avg_price": price}); st.session_state.portfolio.append(det); st.rerun()
@@ -266,7 +270,7 @@ elif curr == "💰 배당 계산기":
         st.plotly_chart(px.bar(df_m, x="Month", y="Amount", color="Amount", title="월별 배당금"), use_container_width=True)
         if st.button("초기화"): st.session_state.portfolio = []; st.rerun()
 
-elif curr == "⚙️ 시스템":
+elif curr_tab == "⚙️ 시스템":
     st.title("⚙️ 시스템")
     if st.button("🚀 GitHub 강제 동기화"): 
         if logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4)): st.success("동기화 성공")
