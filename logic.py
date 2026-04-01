@@ -143,7 +143,16 @@ def check_multi_signals(df, strategy_list):
                 if op == ">=": res = (v_a >= v_b)
                 elif op == "<=": res = (v_a <= v_b)
                 elif op == ">": res = (v_a > v_b)
-                else: res = (v_a < v_b)
+                elif op == "<": res = (v_a < v_b)
+                else: res = (v_a >= v_b)
+
+                # 이격도 필터링 추가 (Max Disparity %)
+                disp_val = cond.get('disparity')
+                if disp_val is not None and disp_val > 0:
+                    # |(A/B - 1) * 100| <= disp_val
+                    disparity_calc = abs((v_a / v_b - 1) * 100)
+                    res &= (disparity_calc <= float(disp_val))
+
                 if cond.get('p_type') == "within": c_cond &= res.rolling(int(cond['period'])+1, min_periods=1).max().fillna(0).astype(bool)
                 else: c_cond &= res.shift(int(cond['period'])).fillna(False)
             cond_res = c_cond

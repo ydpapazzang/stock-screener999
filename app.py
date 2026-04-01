@@ -160,14 +160,21 @@ elif curr_tab == "🛠️ 전략 커스텀":
         
         t_tabs = st.tabs(["📈 이동평균 (MA)", "📊 RSI", "🔊 거래량"])
         with t_tabs[0]:
-            col1, col2, col3, col4, col5 = st.columns([2, 2, 2, 1, 2])
+            col1, col2, col3, col4, col5, col6 = st.columns([2, 2, 2, 1, 2, 2])
             ma_p_t = col1.selectbox("타입", ["N봉전", "N봉 이내"], key="ma_pt")
             ma_p_v = col2.selectbox("기간", [f"{i}봉" for i in range(11)], key="ma_pv")
             ma_a = col3.selectbox("비교 A", ["종가"]+[f"MA{i}" for i in range(1,101)], key="ma_a")
             ma_op = col4.selectbox("조건", [">=", "<=", ">", "<"], key="ma_op")
             ma_b = col5.selectbox("비교 B", [f"MA{i}" for i in range(1,366)], index=19, key="ma_b")
-            if st.button("➕ MA 조건 추가"):
-                st.session_state.temp_conditions.append({"a":ma_a, "b":ma_b, "op":ma_op, "period":int(ma_p_v.replace("봉","")), "p_type":"ago" if ma_p_t=="N봉전" else "within"})
+            ma_disp = col6.number_input("최대 이격도 (%)", 0.0, 100.0, 0.0, 0.1, help="0은 무시. (예: 5 입력 시 A와 B의 간격이 5% 이내인 종목만 검색)", key="ma_disp")
+            
+            if st.button("➕ MA 조건 추가", use_container_width=True):
+                st.session_state.temp_conditions.append({
+                    "a":ma_a, "b":ma_b, "op":ma_op, 
+                    "period":int(ma_p_v.replace("봉","")), 
+                    "p_type":"ago" if ma_p_t=="N봉전" else "within",
+                    "disparity": ma_disp if ma_disp > 0 else None
+                })
                 st.rerun()
         with t_tabs[1]:
             col1, col2, col3, col4 = st.columns([2, 2, 1, 2])
