@@ -22,6 +22,8 @@ if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 if "active_tab_idx" not in st.session_state:
     st.session_state["active_tab_idx"] = 0
+if "scanning" not in st.session_state:
+    st.session_state["scanning"] = False
 
 # --- [2] 사이드바 전역 설정 ---
 with st.sidebar:
@@ -48,28 +50,37 @@ with st.sidebar:
     
     st.divider()
     if st.session_state.get("authenticated"):
-        if st.button("🔍 즉시 스캔 실행", use_container_width=True, type="primary"):
-            df_list = logic.get_listing_data(target)
-            if not df_list.empty:
-                if target == "주식":
-                    df_list = df_list[df_list.get('시총(억)', 0) >= min_cap]
-                targets = df_list.head(limit)
-                results = []
-                with st.spinner("종목 분석 중..."):
-                    with ThreadPoolExecutor(max_workers=10) as exe:
-                        futures = {exe.submit(logic.process_stock_multi_worker, r.Symbol, r.Name, sel_strats, period): r for r in targets.itertuples()}
-                        for f in as_completed(futures):
-                            res = f.result()
-                            if res: results.append(res)
-                
-                st.session_state['last_results'] = pd.DataFrame(results).sort_values(by=["점수"], ascending=False) if results else pd.DataFrame()
-                st.session_state['last_query_strats'] = ", ".join(sel_strats)
-                # 핵심: 스캔 결과 탭(0번)으로 강제 이동
-                st.session_state["active_tab_idx"] = 0
+        if st.session_state["scanning"]:
+            st.button("⏳ 종목 분석 중...", disabled=True, use_container_width=True)
+        else:
+            if st.button("🔍 즉시 스캔 실행", use_container_width=True, type="primary"):
+                st.session_state["scanning"] = True
                 st.rerun()
     else:
         st.error("🔒 보안 접속이 필요합니다.")
         st.button("🔍 즉시 스캔 실행 (잠김)", disabled=True, use_container_width=True)
+
+# --- [2.5] 실제 스캔 로직 실행 (상태가 True인 경우) ---
+if st.session_state["scanning"]:
+    df_list = logic.get_listing_data(target)
+    if not df_list.empty:
+        if target == "주식":
+            df_list = df_list[df_list.get('시총(억)', 0) >= min_cap]
+        targets = df_list.head(limit)
+        results = []
+        with st.spinner(f"🚀 {len(targets)}개 종목 분석 중..."):
+            with ThreadPoolExecutor(max_workers=10) as exe:
+                futures = {exe.submit(logic.process_stock_multi_worker, r.Symbol, r.Name, sel_strats, period): r for r in targets.itertuples()}
+                for f in as_completed(futures):
+                    res = f.result()
+                    if res: results.append(res)
+        
+        st.session_state['last_results'] = pd.DataFrame(results).sort_values(by=["점수"], ascending=False) if results else pd.DataFrame()
+        st.session_state['last_query_strats'] = ", ".join(sel_strats)
+        st.session_state["active_tab_idx"] = 0 # 결과 탭으로 이동
+    
+    st.session_state["scanning"] = False # 상태 해제
+    st.rerun()
 
 if not st.session_state["authenticated"]:
     st.title("🔒 보안 접속")
@@ -85,11 +96,9 @@ if not st.session_state["authenticated"]:
 menu_options = ["🚀 전략 스캔", "📅 알림 설정", "🛠️ 전략 커스텀", "💰 배당 계산기", "⚙️ 시스템"]
 selected_menu = st.segmented_control("메뉴", menu_options, selection_mode="single", default=menu_options[st.session_state["active_tab_idx"]])
 
-# 메뉴 선택 시 인덱스 업데이트 (사이드바 버튼 클릭 시에도 연동됨)
 if selected_menu:
     st.session_state["active_tab_idx"] = menu_options.index(selected_menu)
 
-# 현재 선택된 탭에 따라 화면 렌더링
 curr_tab = menu_options[st.session_state["active_tab_idx"]]
 
 if curr_tab == "🚀 전략 스캔":
