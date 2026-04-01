@@ -173,7 +173,13 @@ def process_stock_multi_worker(symbol, name, strategy_list, period_key):
         if df is not None and len(df) >= 2:
             sig = check_multi_signals(df, strategy_list)
             if sig.iloc[-1]:
-                return {"코드": symbol, "종목명": name, "현재가": f"{df.iloc[-1]['Close']:,.2f}", "신규": "Y" if not sig.iloc[-2] else "N", "일치전략": ", ".join(strategy_list)}
+                # 상태 판별: 이전 봉이 False면 최초진입, True면 추세유지
+                status = "🚀 최초진입" if not sig.iloc[-2] else "📈 추세유지"
+                return {
+                    "코드": symbol, "종목명": name, 
+                    "현재가": f"{df.iloc[-1]['Close']:,.2f}" if not symbol.isdigit() else f"{int(df.iloc[-1]['Close']):,}",
+                    "상태": status, "일치전략": ", ".join(strategy_list)
+                }
     except: pass
     return None
 
