@@ -20,8 +20,8 @@ config = logic.load_config()
 
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
-if "active_tab" not in st.session_state:
-    st.session_state["active_tab"] = 0
+if "active_tab_idx" not in st.session_state:
+    st.session_state["active_tab_idx"] = 0
 
 # --- [2] 사이드바 전역 설정 ---
 with st.sidebar:
@@ -37,12 +37,9 @@ with st.sidebar:
         base_strats = ["5일 연속 상승세", "외인/기관 쌍끌이 매수", "꾸준한 배당주"]
         period = 'D'
         
-    # 커스텀 전략은 이름 앞에 🔴 표시 추가
     custom_list = [f"🔴 {s['name']}" for s in config.get('custom_strategies', []) if s.get('timeframe') == category[:2]]
     all_options = base_strats + custom_list
     sel_labels = st.multiselect("전략 선택", all_options, default=[all_options[0]] if all_options else [])
-    
-    # 로직 실행을 위해 이모지 제거된 순수 전략명 리스트 생성
     sel_strats = [s.replace("🔴 ", "") for s in sel_labels]
     
     target = st.radio("대상", ["주식", "ETF"])
@@ -67,7 +64,8 @@ with st.sidebar:
                 
                 st.session_state['last_results'] = pd.DataFrame(results).sort_values(by=["점수"], ascending=False) if results else pd.DataFrame()
                 st.session_state['last_query_strats'] = ", ".join(sel_strats)
-                st.session_state["active_tab"] = 0 # 스캔 탭으로 이동
+                # 핵심: 스캔 결과 탭(0번)으로 강제 이동
+                st.session_state["active_tab_idx"] = 0
                 st.rerun()
     else:
         st.error("🔒 보안 접속이 필요합니다.")
@@ -83,10 +81,18 @@ if not st.session_state["authenticated"]:
         else: st.error("비밀번호 불일치")
     st.stop()
 
-# --- [3] 메인 UI ---
-tabs = st.tabs(["🚀 전략 스캔", "📅 알림 설정", "🛠️ 전략 커스텀", "💰 배당 계산기", "⚙️ 시스템"])
+# --- [3] 메인 UI (탭 내비게이션) ---
+menu_options = ["🚀 전략 스캔", "📅 알림 설정", "🛠️ 전략 커스텀", "💰 배당 계산기", "⚙️ 시스템"]
+selected_menu = st.segmented_control("메뉴", menu_options, selection_mode="single", default=menu_options[st.session_state["active_tab_idx"]])
 
-with tabs[0]:
+# 메뉴 선택 시 인덱스 업데이트 (사이드바 버튼 클릭 시에도 연동됨)
+if selected_menu:
+    st.session_state["active_tab_idx"] = menu_options.index(selected_menu)
+
+# 현재 선택된 탭에 따라 화면 렌더링
+curr_tab = menu_options[st.session_state["active_tab_idx"]]
+
+if curr_tab == "🚀 전략 스캔":
     if 'last_results' in st.session_state:
         applied_strats = st.session_state.get('last_query_strats', "알 수 없음")
         st.success(f"✅ **스캔 완료** | 적용 전략: `{applied_strats}`")
@@ -103,7 +109,7 @@ with tabs[0]:
         st.title("🚀 전략 스캔")
         st.info("👈 좌측 사이드바에서 전략을 선택하고 **[🔍 즉시 스캔 실행]** 버튼을 눌러주세요.")
 
-with tabs[1]:
+elif curr_tab == "📅 알림 설정":
     st.title("📅 자동 알림 스케줄")
     import uuid
     with st.expander("➕ 새 알림 추가"):
@@ -140,7 +146,7 @@ with tabs[1]:
                 config['schedules'].pop(i); logic.save_config(config)
                 logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4)); st.rerun()
 
-with tabs[2]:
+elif curr_tab == "🛠️ 전략 커스텀":
     st.title("🛠️ 나만의 전략 커스텀")
     if "custom_strategies" not in config: config["custom_strategies"] = []
     if "temp_conditions" not in st.session_state: st.session_state.temp_conditions = []
@@ -159,11 +165,9 @@ with tabs[2]:
             
         c_name = st.text_input("전략명", value=d_name, placeholder="예: 골든크로스 + 정배열")
         c_unit = st.selectbox("캔들 단위", ["일봉", "주봉", "월봉"], index=d_tf_idx)
-        
         st.write("---")
         st.subheader("🎯 조건 구성")
         c_tabs = st.tabs(["📈 이동평균 (MA)", "📊 RSI", "🔊 거래량"])
-        
         with c_tabs[0]:
             col1, col2, col3, col4, col5 = st.columns([2, 2, 2, 1, 2])
             ma_p_type = col1.selectbox("타입", ["N봉전", "N봉 이내"], key="ma_pt")
@@ -234,7 +238,7 @@ with tabs[2]:
                 logic.save_config(config); logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4))
                 st.rerun()
 
-with tabs[3]:
+elif curr_tab == "💰 배당 계산기":
     st.title("💰 스마트 배당금 계산기")
     if "portfolio" not in st.session_state: st.session_state.portfolio = []
     with st.expander("➕ 보유 종목 추가", expanded=True):
@@ -294,13 +298,7 @@ with tabs[3]:
         if st.button("🗑️ 포트폴리오 초기화"): st.session_state.portfolio = []; st.rerun()
     else: st.info("보유 종목을 추가하여 배당 대시보드를 생성하세요.")
 
-with tabs[3]:
-    st.title("🛠️ 전략 가이드")
-    all_s = ["정석 정배열 (추세추종)", "20월선 눌림목 (조정매수)", "거래량 폭발 (세력개입)", "5일 연속 상승세", "저평가 성장주 (퀀트)", "외인/기관 쌍끌이 매수", "꾸준한 배당주"]
-    sel = st.selectbox("전략 선택", all_s)
-    st.info(logic.get_strategy_desc(sel))
-
-with tabs[4]:
+elif curr_tab == "⚙️ 시스템":
     st.title("⚙️ 시스템 정보")
     if st.button("🚀 GitHub 강제 동기화"):
         if logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4)): st.success("동기화 성공!")
