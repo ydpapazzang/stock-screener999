@@ -1,4 +1,4 @@
-# VERSION: 1.1.0 (Robust Chart Notification)
+# VERSION: 1.1.1 (Universal Search & Watchlist Fix)
 import FinanceDataReader as fdr
 import pandas as pd
 import numpy as np
@@ -52,17 +52,36 @@ def get_listing_data(target):
         return df[['Symbol', 'Name', '시총(억)']]
     except: return pd.DataFrame()
 
+@st.cache_data(ttl=86400) # 종목 검색 리스트는 하루 단위 캐싱
+def get_searchable_list():
+    try:
+        # 1. 한국 시장 전체
+        df_kr = fdr.StockListing('KRX')[['Symbol', 'Name']]
+        kr_list = [f"{r.Name} ({r.Symbol})" for r in df_kr.itertuples()]
+        
+        # 2. 미국 나스닥 주요 종목
+        df_us = fdr.StockListing('NASDAQ')[['Symbol', 'Name']]
+        us_list = [f"{r.Name} ({r.Symbol})" for r in df_us.itertuples()[:1000]] # 상위 1000개만 포함하여 속도 확보
+        
+        return sorted(list(set(kr_list + us_list)))
+    except Exception as e:
+        print(f"Search List Error: {e}")
+        return ["삼성전자 (005930)", "SK하이닉스 (000660)", "Apple (AAPL)", "NVIDIA (NVDA)", "Tesla (TSLA)"]
+
 @st.cache_data(ttl=1800)
 def get_processed_data(symbol, period='D'):
     try:
-        is_kr = symbol.isdigit() and len(symbol) == 6
+        is_kr = str(symbol).isdigit() and len(str(symbol)) == 6
         yf_sym = f"{symbol}.KS" if is_kr and int(symbol) < 900000 else (f"{symbol}.KQ" if is_kr else symbol)
+        
         ticker = yf.Ticker(yf_sym)
         df = ticker.history(period="5y", interval="1d")
         if df.empty: return None
+        
         df.index = pd.to_datetime(df.index).tz_localize(None)
         if period == 'M': df = df.resample('ME').agg({'Open':'first','High':'max','Low':'min','Close':'last','Volume':'sum'})
         elif period == 'W': df = df.resample('W').agg({'Open':'first','High':'max','Low':'min','Close':'last','Volume':'sum'})
+        
         for n in [5, 10, 20, 60, 120]: df[f'ma{n}'] = df['Close'].rolling(n, min_periods=1).mean()
         df['vol_ma5'] = df['Volume'].rolling(5, min_periods=1).mean()
         delta = df['Close'].diff()
@@ -72,7 +91,7 @@ def get_processed_data(symbol, period='D'):
         return df
     except: return None
 
-# --- [2] 전략 엔진 ---
+# (나머지 전략 엔진 및 알림 함수들은 유지됨)
 def get_indicator_val(df, key):
     k = str(key).upper()
     if k == "종가": return df['Close']
@@ -114,7 +133,6 @@ def check_multi_signals(df, strategy_list):
         final &= cond_res
     return final.fillna(False)
 
-# --- [3] 분석 및 알림 (MATPLOTLIB 사용) ---
 def run_backtest(df, strategy_list):
     try:
         sig = check_multi_signals(df, strategy_list)
@@ -128,35 +146,6 @@ def run_backtest(df, strategy_list):
         return round(win, 1), round(sum(res)/len(res), 2), len(res)
     except: return 0, 0, 0
 
-def send_telegram_with_chart(token, chat_id, symbol, name, df, strategy_names):
-    if not token or not chat_id: return False
-    try:
-        # Kaleido/Chrome 의존성 제거를 위해 Matplotlib 사용
-        plt.style.use('dark_background')
-        df_p = df.tail(60)
-        fig, ax = plt.subplots(figsize=(8, 4.5))
-        
-        ax.plot(df_p.index, df_p['Close'], label='Price', color='white', linewidth=1.5)
-        if 'ma20' in df_p.columns: ax.plot(df_p.index, df_p['ma20'], label='MA20', color='yellow', linewidth=1, alpha=0.8)
-        if 'ma60' in df_p.columns: ax.plot(df_p.index, df_p['ma60'], label='MA60', color='orange', linewidth=1, alpha=0.8)
-        
-        ax.set_title(f"🚀 {name} ({symbol})", fontsize=12, color='cyan')
-        ax.legend(loc='best', fontsize=8)
-        ax.grid(True, alpha=0.2)
-        plt.tight_layout()
-        
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png', dpi=100)
-        plt.close(fig)
-        buf.seek(0)
-        
-        cap = f"🚀 <b>{name} ({symbol})</b>\n🎯 {', '.join(strategy_names)}\n💰 현재가: {df.iloc[-1]['Close']:,.2f}"
-        res = requests.post(f"https://api.telegram.org/bot{token}/sendPhoto", files={'photo': buf}, data={'chat_id':chat_id, 'caption':cap, 'parse_mode':'HTML'}, timeout=30)
-        return res.status_code == 200
-    except Exception as e:
-        print(f"Chart Send Error: {e}")
-        return False
-
 def send_telegram_all(token, chat_id, results, strategy_names, target_type):
     if not token or not chat_id: return False
     msg = f"🚀 <b>[{target_type}] 포착</b>\n🎯 전략: {', '.join(strategy_names)}\n📊 포착: {len(results)}개\n\n"
@@ -164,19 +153,35 @@ def send_telegram_all(token, chat_id, results, strategy_names, target_type):
     else:
         for i, item in enumerate(results[:15]): msg += f"{i+1}. <b>{item['종목명']}</b> ({item['현재가']})\n"
         if len(results) > 15: msg += f"\n...외 {len(results)-15}건 더보기"
-    
     msg += f"\n\n🔗 <a href='https://stock-screener999-ztg2dqzbktgsfn5xxguc7t.streamlit.app/'>스크리너 접속하기</a>"
     try: return requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"}, timeout=15).status_code == 200
     except: return False
 
+def send_telegram_with_chart(token, chat_id, symbol, name, df, strategy_names):
+    if not token or not chat_id: return False
+    try:
+        plt.style.use('dark_background')
+        df_p = df.tail(60)
+        fig, ax = plt.subplots(figsize=(8, 4.5))
+        ax.plot(df_p.index, df_p['Close'], label='Price', color='white', linewidth=1.5)
+        if 'ma20' in df_p.columns: ax.plot(df_p.index, df_p['ma20'], label='MA20', color='yellow', linewidth=1, alpha=0.8)
+        if 'ma60' in df_p.columns: ax.plot(df_p.index, df_p['ma60'], label='MA60', color='orange', linewidth=1, alpha=0.8)
+        ax.set_title(f"🚀 {name} ({symbol})", fontsize=12, color='cyan')
+        ax.legend(loc='best', fontsize=8); ax.grid(True, alpha=0.2)
+        plt.tight_layout()
+        buf = io.BytesIO(); plt.savefig(buf, format='png', dpi=100); plt.close(fig); buf.seek(0)
+        cap = f"🚀 <b>{name} ({symbol})</b>\n🎯 {', '.join(strategy_names)}\n💰 현재가: {df.iloc[-1]['Close']:,.2f}"
+        return requests.post(f"https://api.telegram.org/bot{token}/sendPhoto", files={'photo': buf}, data={'chat_id':chat_id, 'caption':cap, 'parse_mode':'HTML'}, timeout=30).status_code == 200
+    except: return False
+
 def get_external_link(symbol):
-    is_kr = symbol.isdigit() and len(symbol) == 6
+    is_kr = str(symbol).isdigit() and len(str(symbol)) == 6
     if is_kr: return {"Naver": f"https://finance.naver.com/item/main.naver?code={symbol}", "TradingView": f"https://www.tradingview.com/symbols/KRX-{symbol}/"}
     return {"Yahoo": f"https://finance.yahoo.com/quote/{symbol}", "TradingView": f"https://www.tradingview.com/symbols/NASDAQ-{symbol}/"}
 
 def get_dividend_details(symbol):
     try:
-        is_kr = symbol.isdigit() and len(symbol) == 6
+        is_kr = str(symbol).isdigit() and len(str(symbol)) == 6
         yf_sym = f"{symbol}.KS" if is_kr and int(symbol) < 900000 else (f"{symbol}.KQ" if is_kr else symbol)
         t = yf.Ticker(yf_sym); i = t.info; h = t.dividends
         m = sorted(list(set(h.tail(8).index.month))) if not h.empty else []
@@ -189,35 +194,18 @@ def process_stock_multi_worker(symbol, name, strategy_list, period_key):
         if df is not None and len(df) >= 2:
             sig = check_multi_signals(df, strategy_list)
             if sig.iloc[-1]:
-                # 백테스팅 수행 (최근 3년 데이터 기준)
-                # get_processed_data가 이미 5년치 이상을 로드하므로 tail 활용
+                # 3년 백테스트 결과 포함
                 df_3y = df.tail(252*3) if period_key=='D' else (df.tail(52*3) if period_key=='W' else df.tail(12*3))
                 win, ret, cnt = run_backtest(df_3y, strategy_list)
-                
                 status = "🚀 최초진입" if not sig.iloc[-2] else "📈 추세유지"
-                return {
-                    "코드": symbol, "종목명": name, 
-                    "현재가": f"{df.iloc[-1]['Close']:,.2f}" if not symbol.isdigit() else f"{int(df.iloc[-1]['Close']):,}",
-                    "상태": status, 
-                    "승률": f"{win}%",
-                    "수익률": f"{ret}%",
-                    "포착(3년)": f"{cnt}회",
-                    "일치전략": ", ".join(strategy_list)
-                }
+                return {"코드": symbol, "종목명": name, "현재가": f"{df.iloc[-1]['Close']:,.2f}", "상태": status, "승률": f"{win}%", "수익률": f"{ret}%", "일치전략": ", ".join(strategy_list)}
     except: pass
     return None
-
-def get_searchable_list():
-    try:
-        df = fdr.StockListing('KRX')[['Symbol', 'Name']]
-        return sorted([f"{r.Name} ({r.Symbol})" for r in df.itertuples()])
-    except: return ["삼성전자 (005930)"]
 
 def update_config_to_github(token, repo, content):
     if not token or not repo: return False
     url = f"https://api.github.com/repos/{repo}/contents/config.json"
-    h = {"Authorization": f"token {token}"}
-    r = requests.get(url, headers=h)
+    h = {"Authorization": f"token {token}"}; r = requests.get(url, headers=h)
     sha = r.json().get("sha") if r.status_code == 200 else ""
     return requests.put(url, headers=h, json={"message":"Update config", "content": base64.b64encode(content.encode()).decode(), "sha":sha}).status_code in [200, 201]
 

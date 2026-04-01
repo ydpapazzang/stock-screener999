@@ -105,21 +105,48 @@ if curr_tab == "🚀 전략 스캔":
                 if df_c is not None: st.plotly_chart(logic.create_advanced_chart(df_c, sel_s, sel_strats))
         else: st.warning("포착된 종목이 없습니다.")
     else: st.info("사이드바에서 [즉시 스캔 실행] 버튼을 눌러주세요.")
-
 elif curr_tab == "⭐ 관심종목":
     st.title("⭐ 관심종목 관리")
     if "watchlist" not in config: config["watchlist"] = []
-    with st.expander("➕ 관심종목 추가", expanded=True):
+
+    with st.expander("➕ 관심종목 추가 (한글명 또는 티커 검색)", expanded=True):
         col1, col2 = st.columns([3, 1])
-        if "full_list" not in st.session_state: st.session_state.full_list = logic.get_searchable_list()
-        new_s = col1.selectbox("종목 선택", st.session_state.full_list, index=None)
-        if col2.button("추가") and new_s:
-            sym = re.search(r'\((.*?)\)', new_s).group(1); name = new_s.split(" (")[0]
-            if not any(x['Symbol'] == sym for x in config['watchlist']):
-                config['watchlist'].append({"Symbol": sym, "Name": name}); logic.save_config(config); st.rerun()
+        # 종목 리스트 로드 (캐싱 활용)
+        if "full_search_list" not in st.session_state:
+            with st.spinner("종목 리스트 로드 중..."):
+                st.session_state.full_search_list = logic.get_searchable_list()
+
+        new_stock_selection = col1.selectbox("종목 선택", st.session_state.full_search_list, index=None, placeholder="예: 삼성전자, NVDA, AAPL...")
+
+        if col2.button("추가", use_container_width=True) and new_stock_selection:
+            try:
+                # "종목명 (티커)" 형식에서 티커 추출
+                import re
+                match = re.search(r'\((.*?)\)', new_stock_selection)
+                if match:
+                    sym = match.group(1)
+                    name = new_stock_selection.split(" (")[0]
+                    if not any(x['Symbol'] == sym for x in config['watchlist']):
+                        config['watchlist'].append({"Symbol": sym, "Name": name})
+                        logic.save_config(config)
+                        st.success(f"✅ {name} ({sym}) 추가 완료!")
+                        st.rerun()
+                    else:
+                        st.warning("이미 등록된 종목입니다.")
+            except Exception as e:
+                st.error(f"추가 중 오류 발생: {e}")
+
     if config['watchlist']:
-        df_w = pd.DataFrame(config['watchlist']); df_w.index = range(1, len(df_w)+1); st.dataframe(df_w, use_container_width=True)
-        if st.button("🗑️ 전체 삭제"): config['watchlist'] = []; logic.save_config(config); st.rerun()
+        st.write(f"현재 등록된 종목: **{len(config['watchlist'])}개**")
+        df_w = pd.DataFrame(config['watchlist'])
+        df_w.index = range(1, len(df_w)+1)
+        st.dataframe(df_w, use_container_width=True)
+        if st.button("🗑️ 관심종목 전체 삭제"):
+            config['watchlist'] = []
+            logic.save_config(config)
+            st.rerun()
+    else:
+        st.info("등록된 관심종목이 없습니다. 위에서 종목을 검색해 추가하세요.")
 
 elif curr_tab == "📅 알림 설정":
     st.title("📅 자동 알림 스케줄")
