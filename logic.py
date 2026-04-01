@@ -1,4 +1,4 @@
-# VERSION: 1.0.9 (Telegram Error Handling & Stability)
+# VERSION: 1.1.0 (Robust Chart Notification)
 import FinanceDataReader as fdr
 import pandas as pd
 import numpy as np
@@ -13,6 +13,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import yfinance as yf
+import matplotlib.pyplot as plt
 
 CONFIG_FILE = "config.json"
 
@@ -45,7 +46,6 @@ def get_listing_data(target):
         market = mapping.get(target, "KRX")
         df = fdr.StockListing(market)
         df = df.rename(columns={'Code': 'Symbol', 'Marcap': '시가총액', 'Name': 'Name'})
-        
         if '시가총액' in df.columns: df['시총(억)'] = (df['시가총액'] / 100000000).round(0)
         elif 'MarketCap' in df.columns: df['시총(억)'] = (df['MarketCap'] * 1350 / 100000000).round(0)
         else: df['시총(억)'] = 0
@@ -57,18 +57,14 @@ def get_processed_data(symbol, period='D'):
     try:
         is_kr = symbol.isdigit() and len(symbol) == 6
         yf_sym = f"{symbol}.KS" if is_kr and int(symbol) < 900000 else (f"{symbol}.KQ" if is_kr else symbol)
-        
         ticker = yf.Ticker(yf_sym)
         df = ticker.history(period="5y", interval="1d")
         if df.empty: return None
-        
         df.index = pd.to_datetime(df.index).tz_localize(None)
         if period == 'M': df = df.resample('ME').agg({'Open':'first','High':'max','Low':'min','Close':'last','Volume':'sum'})
         elif period == 'W': df = df.resample('W').agg({'Open':'first','High':'max','Low':'min','Close':'last','Volume':'sum'})
-        
         for n in [5, 10, 20, 60, 120]: df[f'ma{n}'] = df['Close'].rolling(n, min_periods=1).mean()
         df['vol_ma5'] = df['Volume'].rolling(5, min_periods=1).mean()
-        
         delta = df['Close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(14, min_periods=1).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(14, min_periods=1).mean()
@@ -85,19 +81,15 @@ def get_indicator_val(df, key):
     if k.startswith("MA"):
         n = int(k[2:])
         col = f'ma{n}'
-        if col in df.columns: return df[col]
-        return df['Close'].rolling(n, min_periods=1).mean()
-    if k.startswith("VMA"):
-        return df['Volume'].rolling(int(k[3:]), min_periods=1).mean()
+        return df[col] if col in df.columns else df['Close'].rolling(n, min_periods=1).mean()
+    if k.startswith("VMA"): return df['Volume'].rolling(int(k[3:]), min_periods=1).mean()
     try: return pd.Series(float(key), index=df.index)
     except: return None
 
 def check_multi_signals(df, strategy_list):
     if df is None or len(df) < 2: return pd.Series(False, index=df.index if df is not None else [])
     final = pd.Series(True, index=df.index)
-    config = load_config()
-    customs = {s['name']: s for s in config.get('custom_strategies', [])}
-    
+    customs = {s['name']: s for s in load_config().get('custom_strategies', [])}
     for s_name in strategy_list:
         if s_name in customs:
             c_cond = pd.Series(True, index=df.index)
@@ -108,27 +100,21 @@ def check_multi_signals(df, strategy_list):
                     bk, mult = b_raw.split(" * ")
                     v_b = get_indicator_val(df, bk) * float(mult)
                 else: v_b = get_indicator_val(df, b_raw)
-                
                 op = cond.get('op', '>=')
                 if op == ">=": res = (v_a >= v_b)
                 elif op == "<=": res = (v_a <= v_b)
                 elif op == ">": res = (v_a > v_b)
                 else: res = (v_a < v_b)
-                
-                if cond.get('p_type') == "within":
-                    c_cond &= res.rolling(int(cond['period'])+1, min_periods=1).max().fillna(0).astype(bool)
-                else:
-                    c_cond &= res.shift(int(cond['period'])).fillna(False)
+                if cond.get('p_type') == "within": c_cond &= res.rolling(int(cond['period'])+1, min_periods=1).max().fillna(0).astype(bool)
+                else: c_cond &= res.shift(int(cond['period'])).fillna(False)
             cond_res = c_cond
-        elif s_name == "정석 정배열 (추세추종)":
-            cond_res = (df['ma5'] > df['ma20']) & (df['ma20'] > df['ma60']) & (df['Close'] > df['ma5'])
-        elif s_name == "거래량 폭발 (세력개입)":
-            cond_res = (df['Volume'] > df['vol_ma5'] * 2.0) & (df['Close'] > df['Open'])
+        elif s_name == "정석 정배열 (추세추종)": cond_res = (df['ma5'] > df['ma20']) & (df['ma20'] > df['ma60']) & (df['Close'] > df['ma5'])
+        elif s_name == "거래량 폭발 (세력개입)": cond_res = (df['Volume'] > df['vol_ma5'] * 2.0) & (df['Close'] > df['Open'])
         else: cond_res = pd.Series(True, index=df.index)
         final &= cond_res
     return final.fillna(False)
 
-# --- [3] 분석 및 알림 ---
+# --- [3] 분석 및 알림 (MATPLOTLIB 사용) ---
 def run_backtest(df, strategy_list):
     try:
         sig = check_multi_signals(df, strategy_list)
@@ -138,47 +124,47 @@ def run_backtest(df, strategy_list):
             elif in_pos and (not sig.iloc[i] or i == len(df)-1):
                 res.append((df.iloc[i]['Close']/buy_p - 1)*100); in_pos = False
         if not res: return 0, 0, 0
-        return round(len([r for r in res if r>0])/len(res)*100, 1), round(sum(res)/len(res), 2), len(res)
+        win = len([r for r in res if r>0])/len(res)*100
+        return round(win, 1), round(sum(res)/len(res), 2), len(res)
     except: return 0, 0, 0
 
 def send_telegram_with_chart(token, chat_id, symbol, name, df, strategy_names):
     if not token or not chat_id: return False
     try:
-        import io
+        # Kaleido/Chrome 의존성 제거를 위해 Matplotlib 사용
+        plt.style.use('dark_background')
         df_p = df.tail(60)
-        fig = go.Figure(data=[go.Candlestick(x=df_p.index, open=df_p['Open'], high=df_p['High'], low=df_p['Low'], close=df_p['Close'])])
-        fig.add_trace(go.Scatter(x=df_p.index, y=df_p['ma20'], name="MA20", line=dict(color='yellow', width=1)))
-        fig.update_layout(template="plotly_dark", xaxis_rangeslider_visible=False, margin=dict(l=5,r=5,t=5,b=5), height=400)
+        fig, ax = plt.subplots(figsize=(8, 4.5))
         
-        img = fig.to_image(format="png", width=700, height=400)
+        ax.plot(df_p.index, df_p['Close'], label='Price', color='white', linewidth=1.5)
+        if 'ma20' in df_p.columns: ax.plot(df_p.index, df_p['ma20'], label='MA20', color='yellow', linewidth=1, alpha=0.8)
+        if 'ma60' in df_p.columns: ax.plot(df_p.index, df_p['ma60'], label='MA60', color='orange', linewidth=1, alpha=0.8)
+        
+        ax.set_title(f"🚀 {name} ({symbol})", fontsize=12, color='cyan')
+        ax.legend(loc='best', fontsize=8)
+        ax.grid(True, alpha=0.2)
+        plt.tight_layout()
+        
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=100)
+        plt.close(fig)
+        buf.seek(0)
+        
         cap = f"🚀 <b>{name} ({symbol})</b>\n🎯 {', '.join(strategy_names)}\n💰 현재가: {df.iloc[-1]['Close']:,.2f}"
-        
-        res = requests.post(f"https://api.telegram.org/bot{token}/sendPhoto", 
-                            files={'photo':io.BytesIO(img)}, 
-                            data={'chat_id':chat_id, 'caption':cap, 'parse_mode':'HTML'},
-                            timeout=20)
-        if res.status_code != 200:
-            st.error(f"Telegram API Error: {res.text}")
+        res = requests.post(f"https://api.telegram.org/bot{token}/sendPhoto", files={'photo': buf}, data={'chat_id':chat_id, 'caption':cap, 'parse_mode':'HTML'}, timeout=30)
         return res.status_code == 200
     except Exception as e:
-        st.error(f"Telegram Send Error: {e}")
+        print(f"Chart Send Error: {e}")
         return False
 
 def send_telegram_all(token, chat_id, results, strategy_names, target_type):
     if not token or not chat_id: return False
     msg = f"🚀 <b>[{target_type}] 포착</b>\n🎯 전략: {', '.join(strategy_names)}\n📊 포착: {len(results)}개\n\n"
-    if not results:
-        msg = f"🔔 <b>[{target_type}]</b>\n🎯 전략: {', '.join(strategy_names)}\n\n현재 조건에 맞는 종목이 없습니다."
+    if not results: msg = f"🔔 <b>[{target_type}]</b>\n🎯 전략: {', '.join(strategy_names)}\n\n현재 조건에 맞는 종목이 없습니다."
     else:
-        for i, item in enumerate(results[:15]):
-            msg += f"{i+1}. <b>{item['종목명']}</b> ({item['현재가']})\n"
+        for i, item in enumerate(results[:15]): msg += f"{i+1}. <b>{item['종목명']}</b> ({item['현재가']})\n"
         if len(results) > 15: msg += f"\n...외 {len(results)-15}건 더보기"
-    
-    try:
-        res = requests.post(f"https://api.telegram.org/bot{token}/sendMessage", 
-                            json={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"},
-                            timeout=15)
-        return res.status_code == 200
+    try: return requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"}, timeout=15).status_code == 200
     except: return False
 
 def get_external_link(symbol):

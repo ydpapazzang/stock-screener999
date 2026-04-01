@@ -9,5 +9,4 @@ lxml
 lxml_html_clean
 yfinance
 plotly
-kaleido
 matplotlib
