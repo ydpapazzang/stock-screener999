@@ -40,7 +40,8 @@ with st.sidebar:
     sel_labels = st.multiselect("전략 선택", all_opts, default=[all_opts[0]] if all_opts else [])
     sel_strats = [s.replace("🔴 ", "") for s in sel_labels]
     
-    target = st.radio("대상", ["KOSPI/KOSDAQ", "한국 ETF", "미국 나스닥", "미국 ETF", "⭐ 관심종목"])
+    # 관심종목 제거됨
+    target = st.radio("대상 시장", ["KOSPI/KOSDAQ", "한국 ETF", "미국 나스닥", "미국 ETF"])
     min_cap = st.slider("최소 시총 (억)", 0, 10000, 500, 100)
     limit = st.slider("최대 분석 수", 10, 1000, 100)
     
@@ -55,7 +56,7 @@ with st.sidebar:
 
 # --- [1.5] 스캔 로직 실행 ---
 if st.session_state["scanning"]:
-    df_l = pd.DataFrame(config.get('watchlist', [])) if target == "⭐ 관심종목" else logic.get_listing_data(target)
+    df_l = logic.get_listing_data(target)
     if not df_l.empty:
         if '시총(억)' in df_l.columns and "ETF" not in target: df_l = df_l[df_l['시총(억)'] >= min_cap]
         targets = df_l.head(limit)
@@ -80,7 +81,8 @@ if not st.session_state["authenticated"]:
     st.stop()
 
 # --- [3] 메인 UI (내비게이션) ---
-menu = ["🚀 전략 스캔", "⭐ 관심종목", "📅 알림 설정", "🛠️ 전략 커스텀", "💰 배당 계산기", "⚙️ 시스템"]
+# 관심종목 메뉴 제거됨
+menu = ["🚀 전략 스캔", "📅 알림 설정", "🛠️ 전략 커스텀", "💰 배당 계산기", "⚙️ 시스템"]
 sel_menu = st.segmented_control("메뉴", menu, selection_mode="single", default=menu[st.session_state["active_tab_idx"]])
 if sel_menu: st.session_state["active_tab_idx"] = menu.index(sel_menu)
 curr_tab = menu[st.session_state["active_tab_idx"]]
@@ -105,48 +107,6 @@ if curr_tab == "🚀 전략 스캔":
                 if df_c is not None: st.plotly_chart(logic.create_advanced_chart(df_c, sel_s, sel_strats))
         else: st.warning("포착된 종목이 없습니다.")
     else: st.info("사이드바에서 [즉시 스캔 실행] 버튼을 눌러주세요.")
-elif curr_tab == "⭐ 관심종목":
-    st.title("⭐ 관심종목 관리")
-    if "watchlist" not in config: config["watchlist"] = []
-
-    with st.expander("➕ 관심종목 추가 (한글명 또는 티커 검색)", expanded=True):
-        col1, col2 = st.columns([3, 1])
-        # 종목 리스트 로드 (캐싱 활용)
-        if "full_search_list" not in st.session_state:
-            with st.spinner("종목 리스트 로드 중..."):
-                st.session_state.full_search_list = logic.get_searchable_list()
-
-        new_stock_selection = col1.selectbox("종목 선택", st.session_state.full_search_list, index=None, placeholder="예: 삼성전자, NVDA, AAPL...")
-
-        if col2.button("추가", use_container_width=True) and new_stock_selection:
-            try:
-                # "종목명 (티커)" 형식에서 티커 추출
-                import re
-                match = re.search(r'\((.*?)\)', new_stock_selection)
-                if match:
-                    sym = match.group(1)
-                    name = new_stock_selection.split(" (")[0]
-                    if not any(x['Symbol'] == sym for x in config['watchlist']):
-                        config['watchlist'].append({"Symbol": sym, "Name": name})
-                        logic.save_config(config)
-                        st.success(f"✅ {name} ({sym}) 추가 완료!")
-                        st.rerun()
-                    else:
-                        st.warning("이미 등록된 종목입니다.")
-            except Exception as e:
-                st.error(f"추가 중 오류 발생: {e}")
-
-    if config['watchlist']:
-        st.write(f"현재 등록된 종목: **{len(config['watchlist'])}개**")
-        df_w = pd.DataFrame(config['watchlist'])
-        df_w.index = range(1, len(df_w)+1)
-        st.dataframe(df_w, use_container_width=True)
-        if st.button("🗑️ 관심종목 전체 삭제"):
-            config['watchlist'] = []
-            logic.save_config(config)
-            st.rerun()
-    else:
-        st.info("등록된 관심종목이 없습니다. 위에서 종목을 검색해 추가하세요.")
 
 elif curr_tab == "📅 알림 설정":
     st.title("📅 자동 알림 스케줄")
@@ -161,32 +121,28 @@ elif curr_tab == "📅 알림 설정":
     for i, s in enumerate(config.get('schedules', [])):
         with st.container(border=True):
             c1, c2, c3 = st.columns([4, 1, 1])
-            target_market = s.get('target', 'KOSPI/KOSDAQ')
-            c1.write(f"### {s['freq']} | {s['strategy']} ({target_market})")
+            t_m = s.get('target', 'KOSPI/KOSDAQ')
+            c1.write(f"### {s['freq']} | {s['strategy']} ({t_m})")
             if c2.button("📡 발송", key=f"snd_{s['id']}"):
                 with st.spinner("분석 및 발송 중..."):
                     strat_name = s['strategy']
-                    
-                    # 전략 주기 결정
                     s_period = 'D'
                     for cs in config.get('custom_strategies', []):
                         if cs['name'] == strat_name:
                             s_period = 'M' if cs['timeframe'] == "월봉" else ('W' if cs['timeframe'] == "주봉" else 'D')
-                    
-                    df_l = logic.get_listing_data(target_market).head(100)
+                    df_l = logic.get_listing_data(t_m).head(100)
                     results = []
-                    
                     with ThreadPoolExecutor(max_workers=10) as exe:
                         futures = {exe.submit(logic.process_stock_multi_worker, getattr(r,'Symbol',getattr(r,'Index','')), getattr(r,'Name',''), [strat_name], s_period): r for r in df_l.itertuples()}
                         for f in as_completed(futures):
                             res = f.result()
                             if res: results.append(res)
-                    
-                    # 텍스트 요약 메시지만 발송 (그래프 제외 요청 반영)
-                    if logic.send_telegram_all(TG_TOKEN, TG_CHAT_ID, results, [strat_name], target_market):
-                        st.success(f"✅ {target_market} 시장 {len(results)}건 포착 알림을 발송했습니다.")
+                    if results:
+                        logic.send_telegram_all(TG_TOKEN, TG_CHAT_ID, results, [strat_name], t_m)
+                        st.success(f"✅ {t_m} 시장 {len(results)}건 포착 알림을 발송했습니다.")
                     else:
-                        st.error("텔레그램 발송에 실패했습니다.")
+                        logic.send_telegram_all(TG_TOKEN, TG_CHAT_ID, [], [strat_name], t_m)
+                        st.warning("포착 종목이 없어 요약 알림만 발송되었습니다.")
             if c3.button("🗑️ 삭제", key=f"del_{s['id']}"):
                 config['schedules'].pop(i); logic.save_config(config); logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4)); st.rerun()
 
@@ -290,7 +246,8 @@ elif curr_tab == "💰 배당 계산기":
     if "portfolio" not in st.session_state: st.session_state.portfolio = []
     with st.expander("➕ 보유 종목 추가", expanded=True):
         c1,c2,c3 = st.columns(3)
-        if "s_list" not in st.session_state: st.session_state.s_list = logic.get_searchable_list()
+        if "s_list" not in st.session_state:
+            with st.spinner("로드 중..."): st.session_state.s_list = logic.get_searchable_list()
         selected = c1.selectbox("종목 검색", st.session_state.s_list, index=None)
         qty = c2.number_input("수량", min_value=1, value=10)
         price = c3.number_input("평균단가", min_value=0.0, value=50000.0)
