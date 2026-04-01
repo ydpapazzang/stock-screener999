@@ -1,7 +1,16 @@
 {
     "tg_token": "7974642934:AAF-hrHJ9yXGrWQwWAgEBvZ1qATqKul9ayA",
     "tg_chat_id": "1782176235",
-    "schedules": [],
+    "schedules": [
+        {
+            "id": "a80ab2ff",
+            "freq": "\ub9e4\uc77c",
+            "time": "08:45",
+            "strategy": "\uc815\uc11d \uc815\ubc30\uc5f4 (\ucd94\uc138\ucd94\uc885)",
+            "target": "\uc8fc\uc2dd",
+            "limit": 100
+        }
+    ],
     "password": "6666",
     "history": [
         {
