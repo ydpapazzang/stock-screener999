@@ -1,4 +1,4 @@
-# VERSION: 1.0.7 (Stable Engine)
+# VERSION: 1.0.8 (Reliable Engine)
 import FinanceDataReader as fdr
 import pandas as pd
 import numpy as np
@@ -55,27 +55,26 @@ def get_processed_data(symbol, period='D'):
         is_kr = symbol.isdigit() and len(symbol) == 6
         yf_sym = f"{symbol}.KS" if is_kr and int(symbol) < 900000 else (f"{symbol}.KQ" if is_kr else symbol)
         
-        # 월봉 MA120을 위해 넉넉히 15년치 로드
+        start_date = (datetime.now() - timedelta(days=365*15)).strftime('%Y-%m-%d')
         ticker = yf.Ticker(yf_sym)
-        df = ticker.history(period="15y", interval="1d")
+        df = ticker.history(start=start_date, interval='1d')
         if df.empty: return None
         
         df.index = pd.to_datetime(df.index).tz_localize(None)
         if period == 'M': df = df.resample('ME').agg({'Open':'first','High':'max','Low':'min','Close':'last','Volume':'sum'})
         elif period == 'W': df = df.resample('W').agg({'Open':'first','High':'max','Low':'min','Close':'last','Volume':'sum'})
         
-        # 지표 계산 (필요한 것만 계산하여 dropna 위험 방지)
-        df['ma5'] = df['Close'].rolling(5).mean()
-        df['ma20'] = df['Close'].rolling(20).mean()
-        df['ma60'] = df['Close'].rolling(60).mean()
-        df['vol_ma5'] = df['Volume'].rolling(5).mean()
+        # 기본 지표 선계산
+        df['ma5'] = df['Close'].rolling(5, min_periods=1).mean()
+        df['ma20'] = df['Close'].rolling(20, min_periods=1).mean()
+        df['ma60'] = df['Close'].rolling(60, min_periods=1).mean()
+        df['vol_ma5'] = df['Volume'].rolling(5, min_periods=1).mean()
         
         delta = df['Close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+        gain = (delta.where(delta > 0, 0)).rolling(14, min_periods=1).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(14, min_periods=1).mean()
         df['rsi'] = 100 - (100 / (1 + (gain / (loss + 1e-9))))
-        
-        return df.dropna(subset=['ma20', 'rsi']) # 최소한의 지표만으로 드랍
+        return df # dropna 생략 (check_multi_signals에서 처리)
     except: return None
 
 def get_indicator_val(df, key):
@@ -85,31 +84,31 @@ def get_indicator_val(df, key):
     if k == "RSI": return df['rsi']
     if k.startswith("MA"):
         n = int(k[2:])
+        # 이미 선계산된 컬럼이 있으면 활용, 없으면 실시간 계산
         col = f'ma{n}'
         if col in df.columns: return df[col]
-        return df['Close'].rolling(n).mean()
+        return df['Close'].rolling(n, min_periods=1).mean()
     if k.startswith("VMA"):
-        return df['Volume'].rolling(int(k[3:])).mean()
+        return df['Volume'].rolling(int(k[3:]), min_periods=1).mean()
     try: return pd.Series(float(key), index=df.index)
     except: return None
 
 def check_multi_signals(df, strategy_list):
     if df is None or len(df) < 2: return pd.Series(False, index=df.index if df is not None else [])
     final = pd.Series(True, index=df.index)
-    customs = {s['name']: s for s in load_config().get('custom_strategies', [])}
+    config = load_config()
+    customs = {s['name']: s for s in config.get('custom_strategies', [])}
     
     for s_name in strategy_list:
         if s_name in customs:
             c_cond = pd.Series(True, index=df.index)
             for cond in customs[s_name]['conditions']:
                 v_a = get_indicator_val(df, cond['a'])
-                # b에 수식이 포함된 경우 처리 (거래량 배수 등)
                 b_raw = str(cond['b'])
                 if " * " in b_raw:
-                    base_key, mult = b_raw.split(" * ")
-                    v_b = get_indicator_val(df, base_key) * float(mult)
-                else:
-                    v_b = get_indicator_val(df, b_raw)
+                    bk, mult = b_raw.split(" * ")
+                    v_b = get_indicator_val(df, bk) * float(mult)
+                else: v_b = get_indicator_val(df, b_raw)
                 
                 op = cond.get('op', '>=')
                 if op == ">=": res = (v_a >= v_b)
@@ -118,9 +117,9 @@ def check_multi_signals(df, strategy_list):
                 else: res = (v_a < v_b)
                 
                 if cond.get('p_type') == "within":
-                    c_cond &= res.rolling(int(cond['period'])+1, min_periods=1).max().astype(bool)
+                    c_cond &= res.rolling(int(cond['period'])+1, min_periods=1).max().fillna(0).astype(bool)
                 else:
-                    c_cond &= res.shift(int(cond['period']))
+                    c_cond &= res.shift(int(cond['period'])).fillna(False)
             cond_res = c_cond
         elif s_name == "정석 정배열 (추세추종)":
             cond_res = (df['ma5'] > df['ma20']) & (df['ma20'] > df['ma60']) & (df['Close'] > df['ma5'])
@@ -133,16 +132,14 @@ def check_multi_signals(df, strategy_list):
 def run_backtest(df, strategy_list):
     try:
         sig = check_multi_signals(df, strategy_list)
-        results, in_pos, buy_p = [], False, 0
+        res, in_pos, buy_p = [], False, 0
         for i in range(1, len(df)):
-            if not in_pos and sig.iloc[i] and not sig.iloc[i-1]:
-                buy_p, in_pos = df.iloc[i]['Close'], True
+            if not in_pos and sig.iloc[i] and not sig.iloc[i-1]: buy_p, in_pos = df.iloc[i]['Close'], True
             elif in_pos and (not sig.iloc[i] or i == len(df)-1):
-                results.append((df.iloc[i]['Close'] / buy_p - 1) * 100)
-                in_pos = False
-        if not results: return 0, 0, 0
-        win = len([r for r in results if r > 0]) / len(results) * 100
-        return round(win, 1), round(sum(results)/len(results), 2), len(results)
+                res.append((df.iloc[i]['Close']/buy_p - 1)*100); in_pos = False
+        if not res: return 0, 0, 0
+        win = len([r for r in res if r>0])/len(res)*100, 1
+        return round(win[0], 1), round(sum(res)/len(res), 2), len(res)
     except: return 0, 0, 0
 
 def send_telegram_with_chart(token, chat_id, symbol, name, df, strategy_names):
@@ -153,8 +150,7 @@ def send_telegram_with_chart(token, chat_id, symbol, name, df, strategy_names):
         fig.update_layout(template="plotly_dark", xaxis_rangeslider_visible=False, margin=dict(l=5,r=5,t=5,b=5), height=400)
         img = fig.to_image(format="png", width=700, height=400)
         cap = f"🚀 <b>{name} ({symbol})</b>\n🎯 {', '.join(strategy_names)}\n💰 현재가: {df.iloc[-1]['Close']:,.2f}"
-        requests.post(f"https://api.telegram.org/bot{token}/sendPhoto", files={'photo':io.BytesIO(img)}, data={'chat_id':chat_id, 'caption':cap, 'parse_mode':'HTML'})
-        return True
+        return requests.post(f"https://api.telegram.org/bot{token}/sendPhoto", files={'photo':io.BytesIO(img)}, data={'chat_id':chat_id, 'caption':cap, 'parse_mode':'HTML'}).status_code == 200
     except: return False
 
 def get_external_link(symbol):
@@ -166,8 +162,7 @@ def get_dividend_details(symbol):
     try:
         is_kr = symbol.isdigit() and len(symbol) == 6
         yf_sym = f"{symbol}.KS" if is_kr and int(symbol) < 900000 else (f"{symbol}.KQ" if is_kr else symbol)
-        t = yf.Ticker(yf_sym); i = t.info
-        h = t.dividends
+        t = yf.Ticker(yf_sym); i = t.info; h = t.dividends
         m = sorted(list(set(h.tail(8).index.month))) if not h.empty else []
         return {"name": i.get('shortName', symbol), "dps": i.get('dividendRate', 0) or 0, "yield": round((i.get('dividendYield', 0) or 0)*100, 2), "currency": i.get('currency', 'KRW'), "payout": round(i.get('payoutRatio', 0)*100, 1), "months": m}
     except: return None
@@ -194,6 +189,7 @@ def update_config_to_github(token, repo, content):
     h = {"Authorization": f"token {token}"}
     r = requests.get(url, headers=h)
     sha = r.json().get("sha") if r.status_code == 200 else ""
+    import base64
     return requests.put(url, headers=h, json={"message":"Update config", "content": base64.b64encode(content.encode()).decode(), "sha":sha}).status_code in [200, 201]
 
 def create_advanced_chart(df, name, strats):
