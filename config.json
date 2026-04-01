@@ -17,6 +17,14 @@
             "strategy": "5\uc77c \uc5f0\uc18d \uc0c1\uc2b9\uc138",
             "target": "\uc8fc\uc2dd",
             "limit": 100
+        },
+        {
+            "id": "92c77779",
+            "freq": "\ub9e4\uc77c",
+            "time": "09:00",
+            "strategy": "\uc815\uc11d \uc815\ubc30\uc5f4 (\ucd94\uc138\ucd94\uc885)",
+            "target": "\uc8fc\uc2dd",
+            "limit": 100
         }
     ],
     "password": "6666",
