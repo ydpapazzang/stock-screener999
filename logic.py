@@ -42,30 +42,37 @@ def get_searchable_list():
     """한국/미국 주식 및 ETF 전체 리스트 통합 생성"""
     final_list = []
     
-    # 1. 한국 시장 (주식 + ETF)
+    # 1. 한국 시장 (주식 전체 KOSPI/KOSDAQ/KONEX)
     try:
         df_krx = fdr.StockListing('KRX')[['Symbol', 'Name']]
-        final_list += [f"{r.Name} ({r.Symbol})" for r in df_krx.itertuples()]
+        for r in df_krx.itertuples():
+            final_list.append(f"{r.Name} ({r.Symbol})")
+            
+        # 2. 한국 ETF (종목코드 305540 등 포함 보장)
         df_kr_etf = fdr.StockListing('ETF/KR')[['Symbol', 'Name']]
-        final_list += [f"[ETF] {r.Name} ({r.Symbol})" for r in df_kr_etf.itertuples()]
-    except: pass
+        for r in df_kr_etf.itertuples():
+            final_list.append(f"[ETF] {r.Name} ({r.Symbol})")
+    except Exception as e:
+        print(f"KR Search List Error: {e}")
 
-    # 2. 미국 시장 (NASDAQ + NYSE + ETF)
+    # 3. 미국 시장 (NASDAQ + NYSE + ETF)
     try:
-        # 나스닥
+        # 나스닥 주요 종목 (더 많은 범위 확보)
         df_nas = fdr.StockListing('NASDAQ')[['Symbol', 'Name']]
-        final_list += [f"{r.Name} ({r.Symbol})" for r in df_nas.itertuples()[:2000]] # 주요종목 2000개
+        final_list += [f"{r.Name} ({r.Symbol})" for r in df_nas.itertuples()[:3000]]
         # NYSE
         df_nyse = fdr.StockListing('NYSE')[['Symbol', 'Name']]
-        final_list += [f"{r.Name} ({r.Symbol})" for r in df_nyse.itertuples()[:1000]]
+        final_list += [f"{r.Name} ({r.Symbol})" for r in df_nyse.itertuples()[:2000]]
         # 미국 ETF
         df_us_etf = fdr.StockListing('ETF/US')[['Symbol', 'Name']]
-        final_list += [f"[US ETF] {r.Name} ({r.Symbol})" for r in df_us_etf.itertuples()[:500]]
-    except: pass
+        final_list += [f"[US ETF] {r.Name} ({r.Symbol})" for r in df_us_etf.itertuples()[:1000]]
+    except Exception as e:
+        print(f"US Search List Error: {e}")
 
     if not final_list:
         return ["삼성전자 (005930)", "SK하이닉스 (000660)", "Apple (AAPL)", "NVIDIA (NVDA)", "Tesla (TSLA)"]
     
+    # 중복 제거 및 정렬
     return sorted(list(set(final_list)))
 
 @st.cache_data(ttl=3600)
