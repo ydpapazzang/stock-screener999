@@ -115,6 +115,28 @@
                     "p_type": "ago"
                 }
             ]
+        },
+        {
+            "name": "777",
+            "timeframe": "\uc6d4\ubd09",
+            "conditions": [
+                {
+                    "a": "MA6",
+                    "b": "MA12",
+                    "op": ">",
+                    "period": 0,
+                    "p_type": "ago",
+                    "disparity": 5.0
+                },
+                {
+                    "a": "MA12",
+                    "b": "MA24",
+                    "op": ">",
+                    "period": 0,
+                    "p_type": "ago",
+                    "disparity": 5.0
+                }
+            ]
         }
     ],
     "watchlist": [
