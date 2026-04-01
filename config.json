@@ -1,15 +1,7 @@
 {
     "tg_token": "7974642934:AAF-hrHJ9yXGrWQwWAgEBvZ1qATqKul9ayA",
     "tg_chat_id": "1782176235",
-    "schedules": [
-        {
-            "id": "106d9f12",
-            "freq": "\ub9e4\uc77c",
-            "time": "06:00",
-            "strategy": "\uc6d4\ubd09 12\uc120 \ub3cc\ud30c",
-            "target": "KOSPI/KOSDAQ"
-        }
-    ],
+    "schedules": [],
     "password": "6666",
     "history": [
         {
