@@ -15,7 +15,7 @@ TG_CHAT_ID = logic.get_secret("TELEGRAM_CHAT_ID", "")
 ACCESS_PW = logic.get_secret("ACCESS_PASSWORD", "1234")
 
 # --- [1] 기본 설정 및 로그인 ---
-st.set_page_config(page_title="Pro Strategic Screener", layout="wide", page_icon="⚡")
+st.set_page_config(page_title="Strategic Screener Pro", layout="wide", page_icon="⚡")
 config = logic.load_config()
 
 if "authenticated" not in st.session_state:
@@ -29,24 +29,17 @@ if "scanning" not in st.session_state:
 with st.sidebar:
     st.title("🎯 전역 컨트롤")
     category = st.selectbox("분석 단위", ["월봉 전략", "주봉 전략", "일봉 전략"])
-    if "월봉" in category:
-        base_strats = ["정석 정배열 (추세추종)", "20월선 눌림목 (조정매수)", "거래량 폭발 (세력개입)", "대시세 초입 (20선 돌파)", "월봉 MA12 돌파"]
-        period = 'M'
-    elif "주봉" in category:
-        base_strats = ["주봉 5/20 골든크로스", "주봉 RSI 과매도 탈출", "주봉 볼린저 하단 터치", "주봉 20선 돌파 및 안착"]
-        period = 'W'
-    else:
-        base_strats = ["5일 연속 상승세", "외인/기관 쌍끌이 매수", "꾸준한 배당주"]
-        period = 'D'
-        
+    period = 'M' if "월봉" in category else ('W' if "주봉" in category else 'D')
+    
     custom_list = [f"🔴 {s['name']}" for s in config.get('custom_strategies', []) if s.get('timeframe') == category[:2]]
-    all_options = base_strats + custom_list
+    base_options = ["정석 정배열 (추세추종)", "거래량 폭발 (세력개입)", "5일 연속 상승세", "외인/기관 쌍끌이 매수", "꾸준한 배당주"]
+    all_options = base_options + custom_list
     sel_labels = st.multiselect("전략 선택", all_options, default=[all_options[0]] if all_options else [])
     sel_strats = [s.replace("🔴 ", "") for s in sel_labels]
     
-    target = st.radio("대상", ["KOSPI/KOSDAQ", "한국 ETF", "미국 나스닥", "미국 ETF"])
-    min_cap = st.slider("최소 시총 (억)", 0, 10000, 500, 100, help="미국 주식은 대략적인 원화 환산 기준")
-    limit = st.slider("최대 분석 수", 10, 500, 100)
+    target = st.radio("대상", ["KOSPI/KOSDAQ", "한국 ETF", "미국 나스닥", "미국 ETF", "⭐ 관심종목"])
+    min_cap = st.slider("최소 시총 (억)", 0, 10000, 500, 100)
+    limit = st.slider("최대 분석 수", 10, 1000, 100)
     
     st.divider()
     if st.session_state.get("authenticated"):
@@ -54,44 +47,35 @@ with st.sidebar:
             st.button("⏳ 종목 분석 중...", disabled=True, use_container_width=True)
         else:
             if st.button("🔍 즉시 스캔 실행", use_container_width=True, type="primary"):
-                # 즉시 그리드 초기화
                 st.session_state['last_results'] = pd.DataFrame()
-                st.session_state['last_query_strats'] = ""
                 st.session_state["scanning"] = True
                 st.rerun()
     else:
-        st.error("🔒 보안 접속이 필요합니다.")
-        st.button("🔍 즉시 스캔 실행 (잠김)", disabled=True, use_container_width=True)
+        st.error("🔒 보안 접속 필요")
 
-# --- [2.5] 실제 스캔 로직 실행 ---
+# --- [2.5] 스캔 엔진 ---
 if st.session_state["scanning"]:
-    df_list = logic.get_listing_data(target)
-    if not df_list.empty:
-        # 시총 필터링
+    if target == "⭐ 관심종목":
+        watchlist = config.get('watchlist', [])
+        df_list = pd.DataFrame(watchlist) if watchlist else pd.DataFrame()
+    else:
+        df_list = logic.get_listing_data(target)
         if '시총(억)' in df_list.columns and target not in ["미국 ETF", "한국 ETF"]:
             df_list = df_list[df_list['시총(억)'] >= min_cap]
-        
+    
+    if not df_list.empty:
         targets = df_list.head(limit)
         results = []
-        with st.spinner(f"🚀 {target} {len(targets)}개 종목 분석 중..."):
-            # Symbol, Name 컬럼을 안전하게 추출
+        with st.spinner(f"🚀 {len(targets)}개 분석 중..."):
             for r in targets.itertuples():
                 s_code = getattr(r, 'Symbol', getattr(r, 'Index', ''))
                 s_name = getattr(r, 'Name', s_code)
-                
-                # 병렬 처리를 위해 worker 호출 (여기서는 단순화를 위해 루프 내 처리 또는 ThreadPool 유지)
                 res = logic.process_stock_multi_worker(s_code, s_name, sel_strats, period)
                 if res: results.append(res)
         
-        if results:
-            st.session_state['last_results'] = pd.DataFrame(results).sort_values(by=["점수"], ascending=False)
-            st.session_state['last_query_strats'] = ", ".join(sel_strats)
-        else:
-            st.session_state['last_results'] = pd.DataFrame()
-            st.session_state['last_query_strats'] = f"{', '.join(sel_strats)} (포착 없음)"
-            st.warning(f"⚠️ {target} 시장에서 조건에 맞는 종목을 찾지 못했습니다.")
-            
-        st.session_state["active_tab_idx"] = 0 
+        st.session_state['last_results'] = pd.DataFrame(results).sort_values(by=["점수"], ascending=False) if results else pd.DataFrame()
+        st.session_state['last_query_strats'] = ", ".join(sel_strats)
+        st.session_state["active_tab_idx"] = 0
     
     st.session_state["scanning"] = False
     st.rerun()
@@ -106,8 +90,8 @@ if not st.session_state["authenticated"]:
         else: st.error("비밀번호 불일치")
     st.stop()
 
-# --- [3] 메인 UI (탭 내비게이션) ---
-menu_options = ["🚀 전략 스캔", "📅 알림 설정", "🛠️ 전략 커스텀", "💰 배당 계산기", "⚙️ 시스템"]
+# --- [3] 메인 UI ---
+menu_options = ["🚀 전략 스캔", "⭐ 관심종목", "📅 알림 설정", "🛠️ 전략 커스텀", "💰 배당 계산기", "⚙️ 시스템"]
 selected_menu = st.segmented_control("메뉴", menu_options, selection_mode="single", default=menu_options[st.session_state["active_tab_idx"]])
 
 if selected_menu:
@@ -117,65 +101,55 @@ curr_tab = menu_options[st.session_state["active_tab_idx"]]
 
 if curr_tab == "🚀 전략 스캔":
     if 'last_results' in st.session_state:
-        applied_strats = st.session_state.get('last_query_strats', "알 수 없음")
         df_res = st.session_state['last_results']
-        
         if not df_res.empty:
-            st.success(f"✅ **스캔 완료** | 적용 전략: `{applied_strats}` | **총 {len(df_res)}건 포착**")
-            st.title("🚀 전략 스캔 결과")
-            
-            # 인덱스를 1부터 시작하도록 조정
+            st.success(f"✅ 스캔 완료 | 전략: `{st.session_state.get('last_query_strats')}` | 총 {len(df_res)}건")
             df_display = df_res.copy()
-            df_display.index = range(1, len(df_display) + 1)
+            df_display.index = range(1, len(df_display)+1)
             st.dataframe(df_display, use_container_width=True)
             
-            sel_name = st.selectbox("상세 차트 보기", df_res['종목명'].tolist())
+            c1, c2 = st.columns([2, 1])
+            sel_name = c1.selectbox("상세 분석", df_res['종목명'].tolist())
             if sel_name:
-                clean_name = sel_name.split(" (")[0]
-                code = df_res[df_res['종목명']==sel_name]['코드'].values[0]
-                df_chart = logic.get_processed_data(code, period)
+                row = df_res[df_res['종목명']==sel_name].iloc[0]
+                links = logic.get_external_link(row['코드'])
+                with c2:
+                    st.write("🔗 **외부 링크**")
+                    link_cols = st.columns(len(links))
+                    for i, (site, url) in enumerate(links.items()):
+                        link_cols[i].link_button(site, url)
+                
+                df_chart = logic.get_processed_data(row['코드'], period)
                 if df_chart is not None:
-                    st.plotly_chart(logic.create_advanced_chart(df_chart, clean_name, [applied_strats]))
-        else:
-            st.warning(f"✅ **스캔 완료** | 적용 전략: `{applied_strats}`")
-            st.info("검색된 결과가 0건입니다.")
+                    st.plotly_chart(logic.create_advanced_chart(df_chart, sel_name, sel_strats))
+        else: st.warning("포착된 종목이 없습니다.")
+    else: st.info("사이드바에서 [즉시 스캔 실행] 버튼을 눌러주세요.")
 
-elif curr_tab == "📅 알림 설정":
-    st.title("📅 자동 알림 스케줄")
-    import uuid
-    with st.expander("➕ 새 알림 추가"):
-        f = st.selectbox("주기", ["매일", "매주 (월요일)", "매월 (1일)", "매월 (말일)"])
-        base_all = ["정석 정배열 (추세추종)", "20월선 눌림목 (조정매수)", "거래량 폭발 (세력개입)", "5일 연속 상승세", "외인/기관 쌍끌이 매수", "꾸준한 배당주"]
-        custom_all = [s['name'] for s in config.get('custom_strategies', [])]
-        s_choice = st.selectbox("전략", base_all + custom_all)
-        st.info("💡 **알림 시간 안내**: 모든 알림은 오전 06:00 (KST)에 일괄 발송됩니다.")
-        if st.button("💾 알림 저장"):
-            new_s = {"id": str(uuid.uuid4())[:8], "freq": f, "time": "06:00", "strategy": s_choice, "target": "주식", "limit": 100}
-            config['schedules'].append(new_s); logic.save_config(config)
-            logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4))
-            st.success("저장 완료!"); st.rerun()
+elif curr_tab == "⭐ 관심종목":
+    st.title("⭐ 관심종목 관리")
+    if "watchlist" not in config: config["watchlist"] = []
+    
+    with st.expander("➕ 관심종목 추가", expanded=True):
+        col1, col2 = st.columns([3, 1])
+        if "full_search_list" not in st.session_state:
+            with st.spinner("목록 로드 중..."):
+                st.session_state.full_search_list = logic.get_searchable_list()
+        new_stock = col1.selectbox("종목 선택", st.session_state.full_search_list, index=None)
+        if col2.button("추가") and new_stock:
+            import re
+            sym = re.search(r'\((.*?)\)', new_stock).group(1)
+            name = new_stock.split(" (")[0]
+            if not any(x['Symbol'] == sym for x in config['watchlist']):
+                config['watchlist'].append({"Symbol": sym, "Name": name})
+                logic.save_config(config); st.rerun()
 
-    for i, s_item in enumerate(config.get('schedules', [])):
-        with st.container(border=True):
-            c1, c2, c3 = st.columns([4, 1, 1])
-            c1.write(f"### 📡 {s_item['freq']} {s_item['time']} | {s_item['strategy']}")
-            if c2.button("📡 발송", key=f"t_{s_item['id']}"):
-                with st.spinner("발송 중..."):
-                    df_l = logic.get_listing_data("주식").head(50)
-                    res = []
-                    s_period = 'D'
-                    for cs in config.get('custom_strategies', []):
-                        if cs['name'] == s_item['strategy']:
-                            s_period = 'M' if cs['timeframe'] == "월봉" else ('W' if cs['timeframe'] == "주봉" else 'D')
-                    with ThreadPoolExecutor(max_workers=5) as exe:
-                        futures = [exe.submit(logic.process_stock_multi_worker, r.Symbol, r.Name, [s_item['strategy']], s_period) for r in df_l.itertuples()]
-                        for f in as_completed(futures):
-                            if f.result(): res.append(f.result())
-                    logic.send_telegram_all(TG_TOKEN, TG_CHAT_ID, res, [s_item['strategy']], "주식")
-                    st.success("발송 완료!")
-            if c3.button("🗑️ 삭제", key=f"d_{s_item['id']}"):
-                config['schedules'].pop(i); logic.save_config(config)
-                logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4)); st.rerun()
+    if config['watchlist']:
+        df_w = pd.DataFrame(config['watchlist'])
+        df_w.index = range(1, len(df_w)+1)
+        st.dataframe(df_w, use_container_width=True)
+        if st.button("🗑️ 전체 삭제"):
+            config['watchlist'] = []; logic.save_config(config); st.rerun()
+    else: st.info("등록된 관심종목이 없습니다.")
 
 elif curr_tab == "🛠️ 전략 커스텀":
     st.title("🛠️ 나만의 전략 커스텀")
@@ -194,11 +168,13 @@ elif curr_tab == "🛠️ 전략 커스텀":
             d_name = curr["name"]
             d_tf_idx = ["일봉", "주봉", "월봉"].index(curr["timeframe"])
             
-        c_name = st.text_input("전략명", value=d_name, placeholder="예: 골든크로스 + 정배열")
+        c_name = st.text_input("전략명", value=d_name, placeholder="예: 골든크로스 + 거래량")
         c_unit = st.selectbox("캔들 단위", ["일봉", "주봉", "월봉"], index=d_tf_idx)
+        
         st.write("---")
         st.subheader("🎯 조건 구성")
         c_tabs = st.tabs(["📈 이동평균 (MA)", "📊 RSI", "🔊 거래량"])
+        
         with c_tabs[0]:
             col1, col2, col3, col4, col5 = st.columns([2, 2, 2, 1, 2])
             ma_p_type = col1.selectbox("타입", ["N봉전", "N봉 이내"], key="ma_pt")
@@ -238,9 +214,17 @@ elif curr_tab == "🛠️ 전략 커스텀":
                 if c2.button("❌", key=f"del_temp_{idx}"):
                     st.session_state.temp_conditions.pop(idx); st.rerun()
             
-            save_btn_label = "💾 수정 내용 업데이트" if is_edit_mode else "💾 전체 전략 저장"
-            b_col1, b_col2 = st.columns(2)
-            if b_col1.button(save_btn_label, type="primary", use_container_width=True):
+            col1, col2, col3 = st.columns([2, 2, 1])
+            if col1.button("📊 성과 검증 (백테스팅)", use_container_width=True):
+                with st.spinner("과거 데이터 시뮬레이션 중..."):
+                    test_sym = "005930" if c_unit != "월봉" else "AAPL"
+                    df_test = logic.get_processed_data(test_sym, 'D' if c_unit=="일봉" else ('W' if c_unit=="주봉" else 'M'))
+                    win, ret, cnt = logic.run_backtest(df_test, [c_name if c_name else "Temp"])
+                    st.metric(f"{test_sym} 1년 성과", f"승률 {win}%", f"평균수익 {ret}%")
+                    st.write(f"ℹ️ 최근 1년간 {cnt}회 신호 포착됨")
+
+            save_label = "💾 수정 업데이트" if is_edit_mode else "💾 전체 전략 저장"
+            if col2.button(save_label, type="primary", use_container_width=True):
                 if not c_name: st.error("전략명을 입력하세요.")
                 else:
                     new_cs = {"name": c_name, "timeframe": c_unit, "conditions": st.session_state.temp_conditions.copy()}
@@ -248,7 +232,7 @@ elif curr_tab == "🛠️ 전략 커스텀":
                     else: config["custom_strategies"].append(new_cs)
                     logic.save_config(config); logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4))
                     st.session_state.temp_conditions = []; st.session_state.editing_idx = None; st.success("저장 완료!"); st.rerun()
-            if b_col2.button("🧹 초기화 및 취소", use_container_width=True):
+            if col3.button("🧹 초기화", use_container_width=True):
                 st.session_state.temp_conditions = []; st.session_state.editing_idx = None; st.rerun()
         else: st.warning("조건을 추가하세요.")
 
@@ -266,8 +250,38 @@ elif curr_tab == "🛠️ 전략 커스텀":
                 st.rerun()
             if col3.button("🗑️ 삭제", key=f"del_cs_{i}", use_container_width=True):
                 config["custom_strategies"].pop(i)
-                logic.save_config(config); logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4))
-                st.rerun()
+                logic.save_config(config); logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4)); st.rerun()
+
+elif curr_tab == "📅 알림 설정":
+    st.title("📅 자동 알림 스케줄 (차트 포함)")
+    st.info("💡 텔레그램 알림 시 현재 차트 이미지가 함께 전송됩니다.")
+    import uuid
+    with st.expander("➕ 새 알림 추가"):
+        f = st.selectbox("주기", ["매일", "매주 (월요일)", "매월 (1일)", "매월 (말일)"])
+        base_all = ["정석 정배열 (추세추종)", "거래량 폭발 (세력개입)", "5일 연속 상승세", "외인/기관 쌍끌이 매수", "꾸준한 배당주"]
+        custom_all = [s['name'] for s in config.get('custom_strategies', [])]
+        s_choice = st.selectbox("전략", base_all + custom_all)
+        if st.button("💾 알림 저장"):
+            new_s = {"id": str(uuid.uuid4())[:8], "freq": f, "time": "06:00", "strategy": s_choice, "target": "주식", "limit": 100}
+            config['schedules'].append(new_s); logic.save_config(config)
+            logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4))
+            st.success("저장 완료!"); st.rerun()
+
+    for i, s_item in enumerate(config.get('schedules', [])):
+        with st.container(border=True):
+            c1, c2, c3 = st.columns([4, 1, 1])
+            c1.write(f"### 📡 {s_item['freq']} {s_item['time']} | {s_item['strategy']}")
+            if c2.button("📡 발송", key=f"t_{s_item['id']}"):
+                with st.spinner("차트 생성 및 발송 중..."):
+                    df_l = logic.get_listing_data("주식").head(5) # 테스트용 5개
+                    for r in df_l.itertuples():
+                        df_data = logic.get_processed_data(r.Symbol, 'D')
+                        if df_data is not None:
+                            logic.send_telegram_with_chart(TG_TOKEN, TG_CHAT_ID, r.Symbol, r.Name, df_data, [s_item['strategy']])
+                    st.success("발송 완료!")
+            if c3.button("🗑️ 삭제", key=f"d_{s_item['id']}"):
+                config['schedules'].pop(i); logic.save_config(config)
+                logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4)); st.rerun()
 
 elif curr_tab == "💰 배당 계산기":
     st.title("💰 스마트 배당금 계산기")
@@ -298,34 +312,10 @@ elif curr_tab == "💰 배당 계산기":
         total_div = (df_port['qty'] * df_port['dps']).sum()
         yoc = (total_div / total_invest * 100) if total_invest > 0 else 0
         m1, m2, c3, m4 = st.columns(4)
-        m1.metric("총 투자금액", f"{total_invest:,.0f} {df_port['currency'].iloc[0]}")
-        m2.metric("연간 예상 배당금", f"{total_div:,.0f} {df_port['currency'].iloc[0]}")
+        m1.metric("총 투자금액", f"{total_invest:,.0f}")
+        m2.metric("연간 예상 배당금", f"{total_div:,.0f}")
         c3.metric("월 평균 수령액", f"{total_div/12:,.0f}")
         m4.metric("평균 배당수익률(YOC)", f"{yoc:.2f}%")
-        st.subheader("🗓️ 월별 배당 캘린더")
-        monthly_data = {m: 0 for m in range(1, 13)}
-        for p in st.session_state.portfolio:
-            if p['months']:
-                d_per_month = (p['qty'] * p['dps']) / len(p['months'])
-                for m in p['months']: monthly_data[m] += d_per_month
-        df_month = pd.DataFrame({"Month": [f"{m}월" for m in range(1, 13)], "Amount": list(monthly_data.values())})
-        fig_cal = px.bar(df_month, x="Month", y="Amount", title="월별 배당금 분포", color="Amount", color_continuous_scale="Viridis")
-        st.plotly_chart(fig_cal, use_container_width=True)
-        st.subheader("📈 배당 재투자(DRIP) 시뮬레이션")
-        years = st.slider("시뮬레이션 기간 (년)", 1, 30, 10)
-        reinvest_rate = st.slider("배당 재투자 비율 (%)", 0, 100, 100) / 100
-        values = [total_invest]
-        current_val = total_invest
-        for y in range(years):
-            div = current_val * (yoc/100)
-            current_val += (div * reinvest_rate) + (current_val * 0.05)
-            values.append(current_val)
-        fig_drip = px.line(x=list(range(years+1)), y=values, title=f"{years}년 후 예상 자산 변화 (재투자 포함)", labels={"x": "경과 년수", "y": "자산 가치"})
-        st.plotly_chart(fig_drip, use_container_width=True)
-        st.subheader("📋 포트폴리오 상세 및 세금 분석")
-        df_display = df_port[['name', 'dps', 'yield', 'payout', 'qty']].copy()
-        df_display['실수령액(세후)'] = (df_port['qty'] * df_port['dps'] * 0.846).round(0)
-        st.dataframe(df_display, use_container_width=True)
         if st.button("🗑️ 포트폴리오 초기화"): st.session_state.portfolio = []; st.rerun()
     else: st.info("보유 종목을 추가하여 배당 대시보드를 생성하세요.")
 

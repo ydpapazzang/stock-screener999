@@ -36,16 +36,103 @@ def get_secret(key, default=None):
     return os.environ.get(key, default)
 
 # --- [1] 데이터 및 지표 엔진 ---
+def run_backtest(df, strategy_list, hold_days=20):
+    """최근 1년간 해당 전략의 승률 및 평균 수익률 계산"""
+    try:
+        signals = check_multi_signals(df, strategy_list)
+        results = []
+        
+        # 신호가 발생한 인덱스 추출
+        signal_indices = df.index[signals]
+        
+        for idx in signal_indices:
+            # 신호 발생 시점의 위치(int)
+            pos = df.index.get_loc(idx)
+            # 매도 시점 (hold_days 이후 또는 데이터 끝)
+            exit_pos = min(pos + hold_days, len(df) - 1)
+            
+            if exit_pos > pos:
+                buy_price = df.iloc[pos]['Close']
+                sell_price = df.iloc[exit_pos]['Close']
+                profit = (sell_price / buy_price - 1) * 100
+                results.append(profit)
+        
+        if not results: return 0, 0, 0
+        
+        win_rate = len([r for r in results if r > 0]) / len(results) * 100
+        avg_return = sum(results) / len(results)
+        return round(win_rate, 1), round(avg_return, 2), len(results)
+    except: return 0, 0, 0
+
+def get_external_link(symbol, market_type='KR'):
+    """외부 금융 사이트 연결 링크 생성"""
+    is_kr = symbol.isdigit() and len(symbol) == 6
+    if is_kr:
+        return {
+            "Naver": f"https://finance.naver.com/item/main.naver?code={symbol}",
+            "TradingView": f"https://www.tradingview.com/symbols/KRX-{symbol}/",
+            "Yahoo": f"https://finance.yahoo.com/quote/{symbol}.KS" if int(symbol) < 900000 else f"https://finance.yahoo.com/quote/{symbol}.KQ"
+        }
+    else:
+        return {
+            "Yahoo": f"https://finance.yahoo.com/quote/{symbol}",
+            "TradingView": f"https://www.tradingview.com/symbols/NASDAQ-{symbol}/",
+            "Finviz": f"https://finviz.com/quote.ashx?t={symbol}"
+        }
+
+def send_telegram_with_chart(token, chat_id, symbol, name, df, strategy_names):
+    """차트 이미지와 함께 텔레그램 알림 전송"""
+    try:
+        import io
+        # 차트 생성 (최근 60봉)
+        df_p = df.tail(60)
+        fig = go.Figure(data=[go.Candlestick(
+            x=df_p.index, open=df_p['Open'], high=df_p['High'], low=df_p['Low'], close=df_p['Close'], name="Price"
+        )])
+        fig.add_trace(go.Scatter(x=df_p.index, y=df_p['ma20'], name="MA20", line=dict(color='yellow', width=1)))
+        fig.add_trace(go.Scatter(x=df_p.index, y=df_p['ma60'], name="MA60", line=dict(color='orange', width=1)))
+        
+        fig.update_layout(
+            title=f"🚀 {name} ({symbol}) - {', '.join(strategy_names)}",
+            template="plotly_dark", xaxis_rangeslider_visible=False,
+            margin=dict(l=10, r=10, t=40, b=10)
+        )
+        
+        # 이미지를 바이트로 변환
+        img_bytes = fig.to_image(format="png", width=800, height=500)
+        
+        caption = f"🚀 <b>[전략 포착] {name} ({symbol})</b>\n🎯 전략: {', '.join(strategy_names)}\n💰 현재가: {df.iloc[-1]['Close']:,.0f}\n\n#주식스캐너 #자동알림"
+        
+        files = {'photo': ('chart.png', io.BytesIO(img_bytes), 'image/png')}
+        data = {'chat_id': chat_id, 'caption': caption, 'parse_mode': 'HTML'}
+        
+        requests.post(f"https://api.telegram.org/bot{token}/sendPhoto", files=files, data=data)
+        return True
+    except Exception as e:
+        print(f"Chart Send Error: {e}")
+        return False
+
 def get_processed_data(symbol, period='M'):
     try:
+        # KR/US 접미사 보정 (yfinance 호환성)
         is_kr = symbol.isdigit() and len(symbol) == 6
+        yf_sym = symbol
+        if is_kr:
+            yf_sym = f"{symbol}.KS" if int(symbol) < 900000 else f"{symbol}.KQ"
+            
         if period == 'M': days = 365*15
         elif period == 'W': days = 365*7
         else: days = 365*2
         
         start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
-        df = fdr.DataReader(symbol, start_date)
+        # fdr 대신 yfinance로 통일 (미국주식 안정성 및 차트 데이터 위해)
+        ticker = yf.Ticker(yf_sym)
+        df = ticker.history(start=start_date, interval='1d')
+        
         if df is None or len(df) < 10: return None
+        
+        # 컬럼명 표준화 (Capitalized)
+        df.index = pd.to_datetime(df.index).tz_localize(None)
         
         if period == 'M': 
             df_res = df.resample('ME').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'})
@@ -54,6 +141,7 @@ def get_processed_data(symbol, period='M'):
         else:
             df_res = df
         
+        # 지표 계산
         df_res['ma5'] = df_res['Close'].rolling(5).mean()
         df_res['ma20'] = df_res['Close'].rolling(20).mean()
         df_res['ma60'] = df_res['Close'].rolling(60).mean()
