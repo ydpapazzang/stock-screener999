@@ -1,16 +1,7 @@
 {
     "tg_token": "7974642934:AAF-hrHJ9yXGrWQwWAgEBvZ1qATqKul9ayA",
     "tg_chat_id": "1782176235",
-    "schedules": [
-        {
-            "id": "46334e30",
-            "freq": "\ub9e4\uc77c",
-            "time": "06:00",
-            "strategy": "\uac70\ub798\ub7c9 \ud3ed\ubc1c (\uc138\ub825\uac1c\uc785)",
-            "target": "ETF",
-            "limit": 100
-        }
-    ],
+    "schedules": [],
     "password": "6666",
     "history": [
         {
