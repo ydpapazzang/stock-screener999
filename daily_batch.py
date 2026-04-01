@@ -8,7 +8,6 @@ def run_batch():
     # --- [1] 설정 및 Secret 로드 ---
     config = logic.load_config()
     
-    # GitHub Actions 환경 변수에서 Secret 로드 (없으면 config에서 시도)
     tg_token = os.environ.get("TELEGRAM_TOKEN") or config.get("tg_token")
     tg_chat_id = os.environ.get("TELEGRAM_CHAT_ID") or config.get("tg_chat_id")
     gh_token = os.environ.get("GH_TOKEN")
@@ -32,24 +31,23 @@ def run_batch():
     is_manual = os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
 
     print(f"--- Batch Start (KST: {now_kst.strftime('%Y-%m-%d %H:%M')}) ---")
-    print(f"Schedules found: {len(config.get('schedules', []))}")
 
     executed_any = False
     new_logs = []
 
-    # 전략별 권장 주기 매핑 (알림용은 'D' 또는 'W'가 적합)
+    # 전략 주기 매핑
     m_strats = ["20월선 눌림목 (조정매수)", "대시세 초입 (20선 돌파)", "월봉 MA12 돌파", "저평가 성장주 (퀀트)"]
-    w_strats = ["주봉 5/20 골든크로스", "주봉 RSI 과매도 탈출", "주봉 볼린저 하단 터치", "주봉 20선 돌파 및 안착", "와인스타인 2단계 돌파"]
+    w_strats = ["주봉 5/20 골든크로스", "주봉 RSI 과매도 탈출", "주봉 볼린저 하단 터치", "주봉 20선 돌파 및 안착"]
+    
+    custom_strats = {s['name']: s for s in config.get('custom_strategies', [])}
 
     for s in config.get("schedules", []):
         try:
             s_h, s_m = map(int, s['time'].split(':'))
-        except: s_h, s_m = 9, 0
+        except: s_h, s_m = 6, 0
         
-        # 60분 단위 매칭 체크 (GitHub Action 지연 대비)
         time_match = (curr_h == s_h) and (curr_m >= s_m) and (curr_m < s_m + 60)
         
-        # 중복 실행 방지 체크
         already_run = False
         for h in config.get("history", []):
             if h.get("time", "").startswith(today_str) and h.get("strategy") == s['strategy'] and h.get("status") == "Success":
@@ -68,19 +66,19 @@ def run_batch():
             target_type = s.get('target', '주식')
             scan_limit = s.get('limit', 200)
             
-            # 주기 결정 (거래량 폭발 등은 알림을 위해 일봉 'D'로 기본 설정)
-            if strat_name in m_strats: period = 'M'
+            # 주기 결정 로직 (커스텀 전략 우선 확인)
+            if strat_name in custom_strats:
+                tf = custom_strats[strat_name].get('timeframe', '일봉')
+                period = 'M' if tf == "월봉" else ('W' if tf == "주봉" else 'D')
+            elif strat_name in m_strats: period = 'M'
             elif strat_name in w_strats: period = 'W'
             else: period = 'D'
             
             print(f"Executing: {strat_name} ({target_type}) | Period: {period}")
             
             df_l = logic.get_listing_data(target_type)
-            if df_l.empty:
-                print(f"Error: Listing empty for {target_type}")
-                continue
+            if df_l.empty: continue
             
-            # 시총 정렬 (주식 포함된 경우)
             if "주식" in target_type and '시총(억)' in df_l.columns:
                 df_l = df_l.sort_values(by='시총(억)', ascending=False)
             
@@ -94,12 +92,10 @@ def run_batch():
                     try:
                         res = f.result()
                         if res: results.append(res)
-                    except Exception as e: pass
+                    except: pass
             
-            # 알림 발송 (결과가 0개여도 시스템 생존 신고를 위해 발송)
             logic.send_telegram_all(tg_token, tg_chat_id, results, [strat_name], target_type)
             
-            # 로그 생성
             new_logs.append({
                 "time": now_kst.strftime("%Y-%m-%d %H:%M"),
                 "strategy": strat_name,
@@ -109,15 +105,12 @@ def run_batch():
             })
             executed_any = True
 
-    # --- [3] 결과 저장 및 동기화 ---
     if executed_any:
         config["history"] = (new_logs + config.get("history", []))[:20]
         logic.save_config(config)
         if gh_token and gh_repo:
             logic.update_config_to_github(gh_token, gh_repo, json.dumps(config, indent=4))
-        print("Batch process completed.")
-    else:
-        print("No schedules were due or already run.")
+        print("Batch complete.")
 
 if __name__ == "__main__":
     run_batch()
