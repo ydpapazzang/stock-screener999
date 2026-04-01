@@ -237,27 +237,37 @@ elif curr_tab == "🛠️ 전략 커스텀":
         else: st.warning("조건을 추가하세요.")
 
     st.write("---")
-    st.subheader("📋 내 커스텀 전략 목록")
+    c1, c2 = st.columns([4, 1])
+    c1.subheader("📋 내 커스텀 전략 목록")
+    if config.get("custom_strategies"):
+        if c2.button("📊 전체 일괄 검증", use_container_width=True, type="primary"):
+            with st.spinner("모든 전략 검증 중..."):
+                all_results = []
+                for cs in config["custom_strategies"]:
+                    test_sym = "005930" if cs['timeframe'] != "월봉" else "AAPL"
+                    df_test = logic.get_processed_data(test_sym, 'D' if cs['timeframe']=="일봉" else ('W' if cs['timeframe']=="주봉" else 'M'))
+                    win, ret, cnt = logic.run_backtest(df_test, [cs['name']])
+                    all_results.append({"전략명": cs['name'], "승률": f"{win}%", "평균수익": f"{ret}%", "횟수": f"{cnt}회"})
+                st.session_state["all_backtest_results"] = all_results
+                st.success("모든 전략 검증 완료!")
+
+    if "all_backtest_results" in st.session_state:
+        with st.expander("📈 일괄 검증 결과 리포트 (최근 1년)", expanded=True):
+            st.table(pd.DataFrame(st.session_state["all_backtest_results"]))
+            if st.button("닫기"): del st.session_state["all_backtest_results"]; st.rerun()
+
     for i, cs in enumerate(config.get("custom_strategies", [])):
         with st.container(border=True):
-            col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
+            col1, col2, col3 = st.columns([4, 1, 1])
             cond_desc = " AND ".join([f"[{c['period']}{'봉전' if c.get('p_type','ago')=='ago' else '봉이내'} {c['a']} {c.get('op','>=')} {c['b']}]" for c in cs['conditions']])
             col1.write(f"### {cs['name']} ({cs['timeframe']})")
             col1.info(f"🔍 전체 조건: {cond_desc}")
             
-            if col2.button("📊 검증", key=f"bt_cs_{i}", use_container_width=True):
-                with st.spinner("분석 중..."):
-                    test_sym = "005930" if cs['timeframe'] != "월봉" else "AAPL"
-                    df_test = logic.get_processed_data(test_sym, 'D' if cs['timeframe']=="일봉" else ('W' if cs['timeframe']=="주봉" else 'M'))
-                    win, ret, cnt = logic.run_backtest(df_test, [cs['name']])
-                    st.toast(f"[{cs['name']}] 승률 {win}% | 수익 {ret}% ({cnt}회)")
-                    col1.success(f"📈 **1년 검증 성과:** 승률 **{win}%** | 평균수익 **{ret}%** ({cnt}회 포착)")
-            
-            if col3.button("📝 수정", key=f"edit_cs_{i}", use_container_width=True):
+            if col2.button("📝 수정", key=f"edit_cs_{i}", use_container_width=True):
                 st.session_state.editing_idx = i
                 st.session_state.temp_conditions = cs['conditions'].copy()
                 st.rerun()
-            if col4.button("🗑️ 삭제", key=f"del_cs_{i}", use_container_width=True):
+            if col3.button("🗑️ 삭제", key=f"del_cs_{i}", use_container_width=True):
                 config["custom_strategies"].pop(i)
                 logic.save_config(config); logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4)); st.rerun()
 
