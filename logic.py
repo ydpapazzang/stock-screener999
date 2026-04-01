@@ -151,6 +151,50 @@ def send_telegram_with_chart(token, chat_id, symbol, name, df, strategy_names):
         return True
     except: return False
 
+def create_advanced_chart(df, name, strats):
+    try:
+        df_p = df.tail(60)
+        fig = go.Figure(data=[go.Candlestick(
+            x=df_p.index, open=df_p['Open'], high=df_p['High'], low=df_p['Low'], close=df_p['Close'], name="Price"
+        )])
+        # 주요 이평선 추가 (선계산된 데이터 활용)
+        colors = {'ma5': 'white', 'ma20': 'yellow', 'ma60': 'orange', 'ma120': 'purple'}
+        for ma, color in colors.items():
+            if ma in df_p.columns:
+                fig.add_trace(go.Scatter(x=df_p.index, y=df_p[ma], name=ma.upper(), line=dict(color=color, width=1)))
+        
+        fig.update_layout(
+            title=f"📈 {name} 분석 차트",
+            template="plotly_dark", xaxis_rangeslider_visible=False,
+            height=500, margin=dict(l=10, r=10, t=40, b=10)
+        )
+        return fig
+    except: return None
+
+def get_fundamental_dividend(yf_sym):
+    try:
+        ticker = yf.Ticker(yf_sym)
+        info = ticker.info
+        div_yield = info.get('dividendYield', 0) or 0
+        if div_yield < 0.03: return False, 0
+        return True, round(div_yield * 100, 1)
+    except: return False, 0
+
+def get_dividend_details(symbol):
+    try:
+        is_kr = symbol.isdigit() and len(symbol) == 6
+        yf_sym = f"{symbol}.KS" if is_kr and int(symbol) < 900000 else (f"{symbol}.KQ" if is_kr else symbol)
+        ticker = yf.Ticker(yf_sym)
+        info = ticker.info
+        return {
+            "name": info.get('shortName', symbol), 
+            "dps": info.get('dividendRate', 0) or 0,
+            "yield": round((info.get('dividendYield', 0) or 0) * 100, 2),
+            "currency": info.get('currency', 'KRW'),
+            "months": [] # 필요 시 추가 구현
+        }
+    except: return None
+
 def get_external_link(symbol):
     is_kr = symbol.isdigit() and len(symbol) == 6
     if is_kr: return {"Naver": f"https://finance.naver.com/item/main.naver?code={symbol}", "TradingView": f"https://www.tradingview.com/symbols/KRX-{symbol}/"}
@@ -160,6 +204,10 @@ def update_config_to_github(token, repo, content):
     if not token or not repo: return False
     url = f"https://api.github.com/repos/{repo}/contents/config.json"
     headers = {"Authorization": f"token {token}"}
-    r = requests.get(url, headers=headers)
-    sha = r.json().get("sha") if r.status_code == 200 else ""
-    return requests.put(url, headers=headers, json={"message":"Update config","content":__import__('base64').b64encode(content.encode()).decode(),"sha":sha}).status_code in [200,201]
+    try:
+        r = requests.get(url, headers=headers)
+        sha = r.json().get("sha") if r.status_code == 200 else ""
+        import base64
+        payload = {"message": "Update config", "content": base64.b64encode(content.encode()).decode(), "sha": sha}
+        return requests.put(url, headers=headers, json=payload).status_code in [200, 201]
+    except: return False
