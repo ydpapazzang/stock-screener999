@@ -195,6 +195,37 @@ def get_dividend_details(symbol):
         }
     except: return None
 
+def process_stock_multi_worker(symbol, name, strategy_list, period_key):
+    try:
+        is_kr = symbol.isdigit() and len(symbol) == 6
+        df_data = get_processed_data(symbol, period_key)
+        if df_data is not None and len(df_data) >= 2:
+            signals = check_multi_signals(df_data, strategy_list)
+            if not signals.iloc[-1]: return None
+            
+            div_info = ""
+            if "꾸준한 배당주" in strategy_list:
+                yf_sym = f"{symbol}.KS" if is_kr and int(symbol) < 900000 else (f"{symbol}.KQ" if is_kr else symbol)
+                is_good, y_val = get_fundamental_dividend(yf_sym)
+                if is_good: div_info = f" ({y_val}%)"
+            
+            curr = df_data.iloc[-1]
+            return {
+                "코드": symbol, "종목명": name + div_info, "점수": 100, 
+                "현재가": f"{curr['Close']:,.2f}" if not is_kr else f"{int(curr['Close']):,}",
+                "신규감지": "Y" if not signals.iloc[-2] else "N",
+                "일치전략": ", ".join(strategy_list)
+            }
+    except: pass
+    return None
+
+def get_searchable_list():
+    try:
+        # 한국 종목
+        df_kr = fdr.StockListing('KRX')[['Symbol', 'Name']]
+        return sorted([f"{row.Name} ({row.Symbol})" for row in df_kr.itertuples()])
+    except: return ["Samsung Electronics (005930)"]
+
 def get_external_link(symbol):
     is_kr = symbol.isdigit() and len(symbol) == 6
     if is_kr: return {"Naver": f"https://finance.naver.com/item/main.naver?code={symbol}", "TradingView": f"https://www.tradingview.com/symbols/KRX-{symbol}/"}
