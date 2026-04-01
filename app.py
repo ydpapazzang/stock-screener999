@@ -87,13 +87,12 @@ with tabs[1]:
     st.title("📅 자동 알림 스케줄")
     import uuid
     with st.expander("➕ 새 알림 추가"):
-        col1, col2 = st.columns(2)
-        f = col1.selectbox("주기", ["매일", "매주 (월요일)", "매월 (1일)", "매월 (말일)"])
-        t = col2.time_input("시간", datetime.strptime("09:00", "%H:%M").time())
+        f = st.selectbox("주기", ["매일", "매주 (월요일)", "매월 (1일)", "매월 (말일)"])
         all_s = ["정석 정배열 (추세추종)", "20월선 눌림목 (조정매수)", "거래량 폭발 (세력개입)", "5일 연속 상승세", "저평가 성장주 (퀀트)", "외인/기관 쌍끌이 매수", "꾸준한 배당주"]
         s = st.selectbox("전략", all_s)
+        st.info("💡 **알림 시간 안내**: 서버의 안정적인 실행을 위해 모든 알림은 **오전 06:00 (KST)**에 일괄 발송되도록 고정됩니다.")
         if st.button("💾 알림 저장"):
-            new_s = {"id": str(uuid.uuid4())[:8], "freq": f, "time": t.strftime("%H:%M"), "strategy": s, "target": "주식", "limit": 100}
+            new_s = {"id": str(uuid.uuid4())[:8], "freq": f, "time": "06:00", "strategy": s, "target": "주식", "limit": 100}
             config['schedules'].append(new_s); logic.save_config(config)
             logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4))
             st.success("저장 완료!"); st.rerun()
