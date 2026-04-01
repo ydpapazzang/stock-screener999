@@ -94,7 +94,14 @@ def check_multi_signals(df, strategy_list):
                 
                 if val_a is not None and val_b is not None:
                     # shift(period)를 통해 n봉전 비교 구현
-                    c_cond &= (val_a.shift(period) >= val_b.shift(period))
+                    op = cond.get('op', '>=')
+                    a_s = val_a.shift(period)
+                    b_s = val_b.shift(period)
+                    
+                    if op == ">=": c_cond &= (a_s >= b_s)
+                    elif op == "<=": c_cond &= (a_s <= b_s)
+                    elif op == ">": c_cond &= (a_s > b_s)
+                    elif op == "<": c_cond &= (a_s < b_s)
             cond = c_cond
         elif strategy == "정석 정배열 (추세추종)":
             ma5 = df['Close'].rolling(5).mean()
