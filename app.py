@@ -75,11 +75,11 @@ with st.sidebar:
                     for f in as_completed(futures):
                         res = f.result()
                         if res: results.append(res)
-            if results:
-                st.session_state['last_results'] = pd.DataFrame(results).sort_values(by=["점수"], ascending=False)
-                st.session_state["active_tab"] = 0 # 스캔 탭으로 이동
-                st.rerun()
-            else: st.warning("포착된 종목이 없습니다.")
+            
+            st.session_state['last_results'] = pd.DataFrame(results).sort_values(by=["점수"], ascending=False) if results else pd.DataFrame()
+            st.session_state['last_query_strats'] = ", ".join(sel_strats)
+            st.session_state["active_tab"] = 0 # 스캔 탭으로 이동
+            st.rerun()
 
 if not st.session_state["authenticated"]:
     # ... (login logic)
@@ -93,22 +93,29 @@ if not st.session_state["authenticated"]:
     st.stop()
 
 # --- [3] 메인 UI ---
+# 탭 포커싱을 위해 st.session_state["active_tab"]을 활용한 내비게이션 (Tabs 대신 Radio/Selectbox 고려 가능하나 일단 Tabs 유지하며 결과 강조)
 tabs = st.tabs(["🚀 전략 스캔", "📅 알림 설정", "🛠️ 전략 커스텀", "💰 배당 계산기", "⚙️ 시스템"])
 
 with tabs[0]:
-    st.title("🚀 전략 스캔 결과")
     if 'last_results' in st.session_state:
+        # 최근 스캔한 전략명 표시
+        applied_strats = st.session_state.get('last_query_strats', "알 수 없음")
+        st.success(f"✅ **스캔 완료** | 적용 전략: `{applied_strats}`")
+        st.title("🚀 전략 스캔 결과")
+        
         st.dataframe(st.session_state['last_results'], use_container_width=True)
-        # ... (chart logic)
-        sel_name = st.selectbox("차트 보기", st.session_state['last_results']['종목명'].tolist())
+        # ... (이하 동일)
+        sel_name = st.selectbox("상세 차트 보기", st.session_state['last_results']['종목명'].tolist())
         if sel_name:
             clean_name = sel_name.split(" (")[0]
             code = st.session_state['last_results'][st.session_state['last_results']['종목명']==sel_name]['코드'].values[0]
+            # 사이드바에서 설정된 period 사용
             df_chart = logic.get_processed_data(code, period)
             if df_chart is not None:
-                st.plotly_chart(logic.create_advanced_chart(df_chart, clean_name, sel_strats))
+                st.plotly_chart(logic.create_advanced_chart(df_chart, clean_name, [applied_strats]))
     else:
-        st.info("좌측 사이드바에서 [즉시 스캔 실행] 버튼을 눌러 분석을 시작하세요.")
+        st.title("🚀 전략 스캔")
+        st.info("👈 좌측 사이드바에서 전략을 선택하고 **[🔍 즉시 스캔 실행]** 버튼을 눌러주세요.")
 
 with tabs[1]:
     # ... (notification logic)
