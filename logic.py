@@ -36,26 +36,28 @@ def get_secret(key, default=None):
     return os.environ.get(key, default)
 
 # --- [1] 데이터 및 지표 엔진 ---
-def run_backtest(df, strategy_list, hold_days=20):
-    """최근 1년간 해당 전략의 승률 및 평균 수익률 계산"""
+def run_backtest(df, strategy_list):
+    """전략이 TRUE인 구간 동안 보유했을 때의 성과 계산 (Buy on TRUE, Sell on FALSE)"""
     try:
         signals = check_multi_signals(df, strategy_list)
         results = []
         
-        # 신호가 발생한 인덱스 추출
-        signal_indices = df.index[signals]
+        in_position = False
+        buy_price = 0
         
-        for idx in signal_indices:
-            # 신호 발생 시점의 위치(int)
-            pos = df.index.get_loc(idx)
-            # 매도 시점 (hold_days 이후 또는 데이터 끝)
-            exit_pos = min(pos + hold_days, len(df) - 1)
+        for i in range(1, len(df)):
+            # 진입: 이전은 False, 현재는 True
+            if not in_position and signals.iloc[i] and not signals.iloc[i-1]:
+                buy_price = df.iloc[i]['Close']
+                in_position = True
             
-            if exit_pos > pos:
-                buy_price = df.iloc[pos]['Close']
-                sell_price = df.iloc[exit_pos]['Close']
-                profit = (sell_price / buy_price - 1) * 100
-                results.append(profit)
+            # 청산: 이전에 True였는데 현재 False로 변함 (또는 마지막 데이터)
+            elif in_position:
+                if not signals.iloc[i] or i == len(df) - 1:
+                    sell_price = df.iloc[i]['Close']
+                    profit = (sell_price / buy_price - 1) * 100
+                    results.append(profit)
+                    in_position = False
         
         if not results: return 0, 0, 0
         
