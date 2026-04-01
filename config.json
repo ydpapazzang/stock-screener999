@@ -30,6 +30,27 @@
     "password": "6666",
     "history": [
         {
+            "time": "2026-04-01 16:16",
+            "strategy": "\uc815\uc11d \uc815\ubc30\uc5f4 (\ucd94\uc138\ucd94\uc885)",
+            "target": "\uc8fc\uc2dd",
+            "count": 19,
+            "status": "Success"
+        },
+        {
+            "time": "2026-04-01 16:16",
+            "strategy": "5\uc77c \uc5f0\uc18d \uc0c1\uc2b9\uc138",
+            "target": "\uc8fc\uc2dd",
+            "count": 0,
+            "status": "Success"
+        },
+        {
+            "time": "2026-04-01 16:16",
+            "strategy": "\uc815\uc11d \uc815\ubc30\uc5f4 (\ucd94\uc138\ucd94\uc885)",
+            "target": "\uc8fc\uc2dd",
+            "count": 19,
+            "status": "Success"
+        },
+        {
             "time": "2026-03-31 13:01",
             "strategy": "\uac70\ub798\ub7c9 \ud3ed\ubc1c (\uc138\ub825\uac1c\uc785) (\uc218\ub3d9)",
             "target": "\uc8fc\uc2dd (KOSPI 200)",
