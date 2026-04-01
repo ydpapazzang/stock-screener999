@@ -189,8 +189,21 @@ def process_stock_multi_worker(symbol, name, strategy_list, period_key):
         if df is not None and len(df) >= 2:
             sig = check_multi_signals(df, strategy_list)
             if sig.iloc[-1]:
+                # 백테스팅 수행 (최근 3년 데이터 기준)
+                # get_processed_data가 이미 5년치 이상을 로드하므로 tail 활용
+                df_3y = df.tail(252*3) if period_key=='D' else (df.tail(52*3) if period_key=='W' else df.tail(12*3))
+                win, ret, cnt = run_backtest(df_3y, strategy_list)
+                
                 status = "🚀 최초진입" if not sig.iloc[-2] else "📈 추세유지"
-                return {"코드": symbol, "종목명": name, "현재가": f"{df.iloc[-1]['Close']:,.2f}", "상태": status, "일치전략": ", ".join(strategy_list)}
+                return {
+                    "코드": symbol, "종목명": name, 
+                    "현재가": f"{df.iloc[-1]['Close']:,.2f}" if not symbol.isdigit() else f"{int(df.iloc[-1]['Close']):,}",
+                    "상태": status, 
+                    "승률": f"{win}%",
+                    "수익률": f"{ret}%",
+                    "포착(3년)": f"{cnt}회",
+                    "일치전략": ", ".join(strategy_list)
+                }
     except: pass
     return None
 
