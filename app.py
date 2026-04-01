@@ -37,9 +37,14 @@ with st.sidebar:
         base_strats = ["5일 연속 상승세", "외인/기관 쌍끌이 매수", "꾸준한 배당주"]
         period = 'D'
         
-    custom_list = [s['name'] for s in config.get('custom_strategies', []) if s.get('timeframe') == category[:2]]
+    # 커스텀 전략은 이름 앞에 🔴 표시 추가
+    custom_list = [f"🔴 {s['name']}" for s in config.get('custom_strategies', []) if s.get('timeframe') == category[:2]]
     all_options = base_strats + custom_list
-    sel_strats = st.multiselect("전략 선택", all_options, default=[all_options[0]])
+    sel_labels = st.multiselect("전략 선택", all_options, default=[all_options[0]] if all_options else [])
+    
+    # 로직 실행을 위해 이모지 제거된 순수 전략명 리스트 생성
+    sel_strats = [s.replace("🔴 ", "") for s in sel_labels]
+    
     target = st.radio("대상", ["주식", "ETF"])
     min_cap = st.slider("최소 시총 (억)", 0, 5000, 500, 100) if target=="주식" else 0
     limit = st.slider("최대 분석 수", 10, 500, 100)
