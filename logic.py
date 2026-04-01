@@ -164,6 +164,8 @@ def send_telegram_all(token, chat_id, results, strategy_names, target_type):
     else:
         for i, item in enumerate(results[:15]): msg += f"{i+1}. <b>{item['종목명']}</b> ({item['현재가']})\n"
         if len(results) > 15: msg += f"\n...외 {len(results)-15}건 더보기"
+    
+    msg += f"\n\n🔗 <a href='https://stock-screener999-ztg2dqzbktgsfn5xxguc7t.streamlit.app/'>스크리너 접속하기</a>"
     try: return requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"}, timeout=15).status_code == 200
     except: return False
 
