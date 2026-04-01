@@ -50,24 +50,28 @@ with st.sidebar:
     limit = st.slider("최대 분석 수", 10, 500, 100)
     
     st.divider()
-    if st.button("🔍 즉시 스캔 실행", use_container_width=True, type="primary"):
-        df_list = logic.get_listing_data(target)
-        if not df_list.empty:
-            if target == "주식":
-                df_list = df_list[df_list.get('시총(억)', 0) >= min_cap]
-            targets = df_list.head(limit)
-            results = []
-            with st.spinner("종목 분석 중..."):
-                with ThreadPoolExecutor(max_workers=10) as exe:
-                    futures = {exe.submit(logic.process_stock_multi_worker, r.Symbol, r.Name, sel_strats, period): r for r in targets.itertuples()}
-                    for f in as_completed(futures):
-                        res = f.result()
-                        if res: results.append(res)
-            
-            st.session_state['last_results'] = pd.DataFrame(results).sort_values(by=["점수"], ascending=False) if results else pd.DataFrame()
-            st.session_state['last_query_strats'] = ", ".join(sel_strats)
-            st.session_state["active_tab"] = 0 # 스캔 탭으로 이동
-            st.rerun()
+    if st.session_state.get("authenticated"):
+        if st.button("🔍 즉시 스캔 실행", use_container_width=True, type="primary"):
+            df_list = logic.get_listing_data(target)
+            if not df_list.empty:
+                if target == "주식":
+                    df_list = df_list[df_list.get('시총(억)', 0) >= min_cap]
+                targets = df_list.head(limit)
+                results = []
+                with st.spinner("종목 분석 중..."):
+                    with ThreadPoolExecutor(max_workers=10) as exe:
+                        futures = {exe.submit(logic.process_stock_multi_worker, r.Symbol, r.Name, sel_strats, period): r for r in targets.itertuples()}
+                        for f in as_completed(futures):
+                            res = f.result()
+                            if res: results.append(res)
+                
+                st.session_state['last_results'] = pd.DataFrame(results).sort_values(by=["점수"], ascending=False) if results else pd.DataFrame()
+                st.session_state['last_query_strats'] = ", ".join(sel_strats)
+                st.session_state["active_tab"] = 0 # 스캔 탭으로 이동
+                st.rerun()
+    else:
+        st.error("🔒 보안 접속이 필요합니다.")
+        st.button("🔍 즉시 스캔 실행 (잠김)", disabled=True, use_container_width=True)
 
 if not st.session_state["authenticated"]:
     st.title("🔒 보안 접속")
