@@ -137,35 +137,39 @@ elif curr_tab == "📅 알림 설정":
                 with st.spinner("분석 및 발송 중..."):
                     strat_name = s['strategy']
                     target_market = s.get('target', 'KOSPI/KOSDAQ')
-
-                    # 전략에 따른 주기(period) 결정
+                    
+                    # 전략 주기 결정
                     s_period = 'D'
                     for cs in config.get('custom_strategies', []):
                         if cs['name'] == strat_name:
                             s_period = 'M' if cs['timeframe'] == "월봉" else ('W' if cs['timeframe'] == "주봉" else 'D')
-
-                    # 종목 리스트 로드 (상위 100개 스캔)
+                    
                     df_l = logic.get_listing_data(target_market).head(100)
                     results = []
-
-                    # 병렬 분석
+                    
                     with ThreadPoolExecutor(max_workers=10) as exe:
                         futures = {exe.submit(logic.process_stock_multi_worker, getattr(r,'Symbol',getattr(r,'Index','')), getattr(r,'Name',''), [strat_name], s_period): r for r in df_l.itertuples()}
                         for f in as_completed(futures):
                             res = f.result()
-                            if res:
-                                results.append(res)
-                                # 포착 시 차트와 함께 즉시 발송
-                                df_data = logic.get_processed_data(res['코드'], s_period)
-                                if df_data is not None:
-                                    logic.send_telegram_with_chart(TG_TOKEN, TG_CHAT_ID, res['코드'], res['종목명'], df_data, [strat_name])
-
-                    # 결과가 없더라도 요약 메시지 발송 (시스템 생존 신고)
-                    if not results:
-                        logic.send_telegram_all(TG_TOKEN, TG_CHAT_ID, [], [strat_name], target_market)
-                        st.warning("조건에 맞는 종목이 없어 요약 메시지만 발송되었습니다.")
+                            if res: results.append(res)
+                    
+                    if results:
+                        # 1. 요약 메시지 먼저 발송
+                        logic.send_telegram_all(TG_TOKEN, TG_CHAT_ID, results, [strat_name], target_market)
+                        
+                        # 2. 상위 10개만 차트 발송 (도배 방지)
+                        sent_count = 0
+                        for res in results[:10]:
+                            df_data = logic.get_processed_data(res['코드'], s_period)
+                            if df_data is not None:
+                                if logic.send_telegram_with_chart(TG_TOKEN, TG_CHAT_ID, res['코드'], res['종목명'], df_data, [strat_name]):
+                                    sent_count += 1
+                                    time.sleep(0.5) # 속도 조절
+                        
+                        st.success(f"✅ 총 {len(results)}건 포착! 요약 메시지와 상위 {sent_count}개의 차트를 발송했습니다.")
                     else:
-                        st.success(f"{len(results)}건의 포착 종목을 차트와 함께 발송했습니다!")
+                        logic.send_telegram_all(TG_TOKEN, TG_CHAT_ID, [], [strat_name], target_market)
+                        st.warning("조건에 맞는 종목이 없어 요약 알림만 발송되었습니다.")
             if c3.button("🗑️ 삭제", key=f"del_{s['id']}"):
                 config['schedules'].pop(i); logic.save_config(config); logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4)); st.rerun()
 
