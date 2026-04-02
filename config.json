@@ -173,6 +173,28 @@
                     "disparity": null
                 }
             ]
+        },
+        {
+            "name": " 주봉/월봉 10이평선 돌파 및 지지 패턴",
+            "timeframe": "주봉",
+            "conditions": [
+                {
+                    "a": "종가",
+                    "b": "MA10",
+                    "op": ">=",
+                    "period": 0,
+                    "p_type": "ago",
+                    "disparity": 3.0
+                },
+                {
+                    "a": "종가",
+                    "b": "MA10",
+                    "op": "<",
+                    "period": 1,
+                    "p_type": "ago",
+                    "disparity": null
+                }
+            ]
         }
     ],
     "watchlist": [
