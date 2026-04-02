@@ -25,11 +25,21 @@ def load_config():
         except: pass
     return {"schedules": [], "history": [], "custom_strategies": [], "watchlist": []}
 
-def save_config(config_data):
+def save_config(config_data, gh_token=None, gh_repo=None):
+    """설정 데이터를 로컬 파일에 저장하고, GitHub에도 동기화합니다."""
     curr = load_config()
     curr.update(config_data)
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(curr, f, ensure_ascii=False, indent=4)
+    content_str = json.dumps(curr, ensure_ascii=False, indent=4)
+
+    # 1. 로컬에 안전하게 저장 (Atomic Write)
+    temp_file = CONFIG_FILE + ".tmp"
+    with open(temp_file, "w", encoding="utf-8") as f:
+        f.write(content_str)
+    os.replace(temp_file, CONFIG_FILE)
+
+    # 2. GitHub에 동기화 (토큰이 제공된 경우)
+    if gh_token and gh_repo:
+        update_config_to_github(gh_token, gh_repo, content_str)
 
 def get_secret(key, default=None):
     try:

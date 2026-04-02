@@ -90,10 +90,8 @@ def run_batch():
     if executed_any:
         # 이력 저장 및 GitHub 동기화
         config["history"] = (new_logs + config.get("history", []))[:20]
-        logic.save_config(config)
-        if gh_token and gh_repo:
-            logic.update_config_to_github(gh_token, gh_repo, json.dumps(config, indent=4))
-        print("Batch complete. History updated.")
+        logic.save_config(config, gh_token=gh_token, gh_repo=gh_repo)
+        print("Batch complete. History and GitHub config updated.")
     else:
         print("No schedules due for execution.")
 

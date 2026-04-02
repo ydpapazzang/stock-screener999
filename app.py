@@ -121,8 +121,8 @@ elif curr_tab == "📅 알림 설정":
         s_choice = st.selectbox("전략", all_s)
         t_choice = st.selectbox("대상 시장", ["KOSPI/KOSDAQ", "한국 ETF", "미국 나스닥", "미국 ETF"])
         if st.button("💾 저장"):
-            config['schedules'].append({"id":str(uuid.uuid4())[:8], "freq":f, "time":"06:00", "strategy":s_choice, "target":t_choice})
-            logic.save_config(config); logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4)); st.rerun()
+            config.setdefault('schedules', []).append({"id":str(uuid.uuid4())[:8], "freq":f, "time":"06:00", "strategy":s_choice, "target":t_choice})
+            logic.save_config(config, gh_token=GH_TOKEN, gh_repo=GH_REPO); st.rerun()
     for i, s in enumerate(config.get('schedules', [])):
         with st.container(border=True):
             c1, c2, c3 = st.columns([4, 1, 1])
@@ -149,7 +149,7 @@ elif curr_tab == "📅 알림 설정":
                         logic.send_telegram_all(TG_TOKEN, TG_CHAT_ID, [], [strat_name], t_m)
                         st.warning("포착 종목이 없어 요약 알림만 발송되었습니다.")
             if c3.button("🗑️ 삭제", key=f"del_{s['id']}"):
-                config['schedules'].pop(i); logic.save_config(config); logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4)); st.rerun()
+                config['schedules'].pop(i); logic.save_config(config, gh_token=GH_TOKEN, gh_repo=GH_REPO); st.rerun()
 
 elif curr_tab == "🛠️ 전략 커스텀":
     # ... (기존 전략 커스텀 로직 유지)
@@ -225,7 +225,7 @@ elif curr_tab == "🛠️ 전략 커스텀":
                 new_s = {"name":c_name, "timeframe":c_unit, "conditions":st.session_state.temp_conditions.copy()}
                 if is_edit: config["custom_strategies"][st.session_state.editing_idx] = new_s
                 else: config["custom_strategies"].append(new_s)
-                logic.save_config(config); logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4))
+                logic.save_config(config, gh_token=GH_TOKEN, gh_repo=GH_REPO)
                 st.session_state.temp_conditions = []; st.session_state.editing_idx = None; st.rerun()
             if b3.button("🧹 초기화", use_container_width=True):
                 st.session_state.temp_conditions = []; st.session_state.editing_idx = None; st.rerun()
@@ -253,7 +253,7 @@ elif curr_tab == "🛠️ 전략 커스텀":
             col1.write(f"### {cs['name']} ({cs['timeframe']})")
             col1.caption(" & ".join([f"[{c['period']}봉전 {c['a']} {c.get('op','>=')} {c['b']}]" for c in cs['conditions']]))
             if col2.button("📝 수정", key=f"edit_{i}"): st.session_state.editing_idx = i; st.session_state.temp_conditions = cs['conditions'].copy(); st.rerun()
-            if col3.button("🗑️ 삭제", key=f"del_{i}"): config["custom_strategies"].pop(i); logic.save_config(config); st.rerun()
+            if col3.button("🗑️ 삭제", key=f"del_{i}"): config["custom_strategies"].pop(i); logic.save_config(config, gh_token=GH_TOKEN, gh_repo=GH_REPO); st.rerun()
 
 elif curr_tab == "⚙️ 시스템":
     st.title("⚙️ 시스템 설정 및 정보")
@@ -266,8 +266,7 @@ elif curr_tab == "⚙️ 시스템":
 
     if new_tz != curr_tz:
         config["timezone"] = new_tz
-        logic.save_config(config)
-        logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4))
+        logic.save_config(config, gh_token=GH_TOKEN, gh_repo=GH_REPO)
         st.success(f"타임존이 {new_tz}로 변경되었습니다.")
         st.rerun()
 
