@@ -127,16 +127,18 @@ if curr_tab == "🚀 전략 스캔":
             except TypeError:
                 # Fallback for older Streamlit versions without row-selection support
                 st.dataframe(df_d, use_container_width=True, hide_index=True)
-            c1, c2 = st.columns([2, 1])
+            c1, c2, c3 = st.columns([2, 1, 1])
             sel_s = c1.selectbox("상세 분석", df['종목명'].tolist(), key=detail_key)
+            chart_tf_label = c2.selectbox("차트 주기", ["일봉", "주봉", "월봉"], key="detail_chart_tf")
+            chart_period = {"일봉": "D", "주봉": "W", "월봉": "M"}[chart_tf_label]
             if sel_s:
                 row = df[df['종목명']==sel_s].iloc[0]
                 links = logic.get_external_link(row['코드'])
-                with c2:
+                with c3:
                     st.write("🔗 **외부 링크**")
                     cols = st.columns(len(links))
                     for idx, (site, url) in enumerate(links.items()): cols[idx].link_button(site, url)
-                df_c = logic.get_processed_data(row['코드'], period)
+                df_c = logic.get_processed_data(row['코드'], chart_period)
                 if df_c is not None: st.plotly_chart(logic.create_advanced_chart(df_c, sel_s, sel_strats))
         else: st.warning("포착된 종목이 없습니다.")
     else: st.info("사이드바에서 [즉시 스캔 실행] 버튼을 눌러주세요.")
