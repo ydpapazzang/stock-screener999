@@ -13,6 +13,13 @@
     "password": "6666",
     "history": [
         {
+            "time": "2026-04-03 06:03",
+            "strategy": "월봉 12선 돌파",
+            "target": "한국 ETF",
+            "count": 24,
+            "status": "Success"
+        },
+        {
             "time": "2026-04-02 06:46",
             "strategy": "월봉 12선 돌파",
             "target": "한국 ETF",
