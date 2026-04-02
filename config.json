@@ -151,28 +151,6 @@
                     "disparity": 5.0
                 }
             ]
-        },
-        {
-            "name": "추세전환",
-            "timeframe": "월봉",
-            "conditions": [
-                {
-                    "a": "MA1",
-                    "b": "MA12",
-                    "op": ">",
-                    "period": 5,
-                    "p_type": "within",
-                    "disparity": 5.0
-                },
-                {
-                    "a": "MA1",
-                    "b": "MA12",
-                    "op": "<",
-                    "period": 5,
-                    "p_type": "within",
-                    "disparity": 5.0
-                }
-            ]
         }
     ],
     "watchlist": [
