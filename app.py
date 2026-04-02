@@ -126,11 +126,10 @@ if curr_tab == "🚀 전략 스캔":
                 selected_rows = grid_resp.get("selected_rows", [])
                 if selected_rows:
                     st.session_state[detail_key] = selected_rows[0]['종목명']
-            # Always render a fallback view so rows stay visible even if AgGrid fails to load on hosting
-            st.dataframe(df_d, use_container_width=True)
             else:
                 st.warning("`streamlit-aggrid` 미설치 상태이므로 기본 테이블만 표시됩니다.")
-                st.dataframe(df_d, use_container_width=True)
+            # Always render a fallback view so rows stay visible even if AgGrid fails to load on hosting
+            st.dataframe(df_d, use_container_width=True)
             c1, c2 = st.columns([2, 1])
             sel_s = c1.selectbox("상세 분석", df['종목명'].tolist(), key=detail_key)
             if sel_s:
