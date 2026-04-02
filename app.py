@@ -7,6 +7,11 @@ import re
 import time
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
+try:
+    from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
+    AG_GRID_AVAILABLE = True
+except ModuleNotFoundError:
+    AG_GRID_AVAILABLE = False
 
 # --- [0] 보안 설정 ---
 GH_TOKEN = logic.get_secret("GH_TOKEN", "")
@@ -103,7 +108,27 @@ if curr_tab == "🚀 전략 스캔":
                 st.session_state[detail_key] = df['종목명'].iloc[0]
             df_d = df.copy()
             df_d.index = range(1, len(df_d) + 1)
-            st.dataframe(df_d, use_container_width=True)
+            if AG_GRID_AVAILABLE:
+                gb = GridOptionsBuilder.from_dataframe(df_d)
+                gb.configure_selection('single', use_checkbox=False, use_radio=True)
+                grid_options = gb.build()
+                grid_options['rowSelection'] = 'single'
+                grid_options['suppressRowClickSelection'] = False
+                grid_resp = AgGrid(
+                    df_d,
+                    gridOptions=grid_options,
+                    height=420,
+                    update_mode=GridUpdateMode.SELECTION_CHANGED,
+                    fit_columns_on_grid_load=True,
+                    allow_unsafe_jscode=True,
+                    theme="streamlit",
+                )
+                selected_rows = grid_resp.get("selected_rows", [])
+                if selected_rows:
+                    st.session_state[detail_key] = selected_rows[0]['종목명']
+            else:
+                st.warning("`streamlit-aggrid` 미설치 상태이므로 기본 테이블만 표시됩니다.")
+                st.dataframe(df_d, use_container_width=True)
             c1, c2 = st.columns([2, 1])
             sel_s = c1.selectbox("상세 분석", df['종목명'].tolist(), key=detail_key)
             if sel_s:
