@@ -42,7 +42,6 @@ with st.sidebar:
     
     # 관심종목 제거됨
     target = st.radio("대상 시장", ["KOSPI/KOSDAQ", "한국 ETF", "미국 나스닥", "미국 ETF"])
-    min_cap = st.slider("최소 시총 (억)", 0, 10000, 500, 100)
     limit = st.slider("최대 분석 수", 10, 1000, 100)
     
     st.divider()
@@ -58,11 +57,6 @@ with st.sidebar:
 if st.session_state["scanning"]:
     df_l = logic.get_listing_data(target)
     if not df_l.empty:
-        # ETF 시장인 경우 시총 필터를 무시하고 전수 조사
-        is_etf = "ETF" in target
-        if '시총(억)' in df_l.columns and not is_etf:
-            df_l = df_l[df_l['시총(억)'] >= min_cap]
-        
         targets = df_l.head(limit)
         results = []
         with st.spinner(f"🚀 {len(targets)}개 분석 중..."):
