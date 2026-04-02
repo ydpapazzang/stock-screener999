@@ -21,6 +21,15 @@ TG_CHAT_ID = logic.get_secret("TELEGRAM_CHAT_ID", "")
 ACCESS_PW = logic.get_secret("ACCESS_PASSWORD", "1234")
 
 st.set_page_config(page_title="Strategic Screener Pro", layout="wide", page_icon="⚡")
+# reduce top padding so grid sits closer to header
+st.markdown(
+    """
+    <style>
+    .block-container {padding-top: 0.8rem;}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 config = logic.load_config()
 
 # 세션 상태 초기화
@@ -128,8 +137,7 @@ if curr_tab == "🚀 전략 스캔":
                     st.session_state[detail_key] = selected_rows[0]['종목명']
             else:
                 st.warning("`streamlit-aggrid` 미설치 상태이므로 기본 테이블만 표시됩니다.")
-            # Always render a fallback view so rows stay visible even if AgGrid fails to load on hosting
-            st.dataframe(df_d, use_container_width=True)
+                st.dataframe(df_d, use_container_width=True)
             c1, c2 = st.columns([2, 1])
             sel_s = c1.selectbox("상세 분석", df['종목명'].tolist(), key=detail_key)
             if sel_s:
