@@ -110,7 +110,7 @@ if curr_tab == "🚀 전략 스캔":
             df_d.index = range(1, len(df_d) + 1)
             if AG_GRID_AVAILABLE:
                 gb = GridOptionsBuilder.from_dataframe(df_d)
-                gb.configure_selection('single', use_checkbox=False, use_radio=True)
+                gb.configure_selection('single', use_checkbox=False)
                 grid_options = gb.build()
                 grid_options['rowSelection'] = 'single'
                 grid_options['suppressRowClickSelection'] = False
