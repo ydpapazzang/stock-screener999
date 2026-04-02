@@ -256,26 +256,25 @@ elif curr_tab == "🛠️ 전략 커스텀":
             if col3.button("🗑️ 삭제", key=f"del_{i}"): config["custom_strategies"].pop(i); logic.save_config(config); st.rerun()
 
 elif curr_tab == "⚙️ 시스템":
-    elif curr_tab == "⚙️ 시스템":
-        st.title("⚙️ 시스템 설정 및 정보")
+    st.title("⚙️ 시스템 설정 및 정보")
 
-        # 타임존 설정
-        st.subheader("🌐 지역 및 시간 설정")
-        tz_list = ["Asia/Seoul", "Europe/Brussels", "America/New_York", "Asia/Tokyo", "Europe/London", "UTC"]
-        curr_tz = config.get("timezone", "Asia/Seoul")
-        new_tz = st.selectbox("내 거주지 타임존 (벨기에: Europe/Brussels)", tz_list, index=tz_list.index(curr_tz) if curr_tz in tz_list else 0)
+    # 타임존 설정
+    st.subheader("🌐 지역 및 시간 설정")
+    tz_list = ["Asia/Seoul", "Europe/Brussels", "America/New_York", "Asia/Tokyo", "Europe/London", "UTC"]
+    curr_tz = config.get("timezone", "Asia/Seoul")
+    new_tz = st.selectbox("내 거주지 타임존 (벨기에: Europe/Brussels)", tz_list, index=tz_list.index(curr_tz) if curr_tz in tz_list else 0)
 
-        if new_tz != curr_tz:
-            config["timezone"] = new_tz
-            logic.save_config(config)
-            logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4))
-            st.success(f"타임존이 {new_tz}로 변경되었습니다.")
-            st.rerun()
+    if new_tz != curr_tz:
+        config["timezone"] = new_tz
+        logic.save_config(config)
+        logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4))
+        st.success(f"타임존이 {new_tz}로 변경되었습니다.")
+        st.rerun()
 
-        now_local = logic.get_now_by_timezone()
-        st.info(f"현재 설정된 시간: **{now_local.strftime('%Y-%m-%d %H:%M:%S')}** ({new_tz})")
+    now_local = logic.get_now_by_timezone()
+    st.info(f"현재 설정된 시간: **{now_local.strftime('%Y-%m-%d %H:%M:%S')}** ({new_tz})")
 
-        st.divider()
-        if st.button("🚀 GitHub 강제 동기화"): 
-            if logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4)): st.success("동기화 성공")
-        if config.get('history'): st.table(pd.DataFrame(config['history']).head(10))
+    st.divider()
+    if st.button("🚀 GitHub 강제 동기화"): 
+        if logic.update_config_to_github(GH_TOKEN, GH_REPO, json.dumps(config, indent=4)): st.success("동기화 성공")
+    if config.get('history'): st.table(pd.DataFrame(config['history']).head(10))
