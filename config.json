@@ -143,11 +143,11 @@
             "timeframe": "월봉",
             "conditions": [
                 {
-                    "a": "MA1",
+                    "a": "MA5",
                     "b": "MA12",
                     "op": ">",
-                    "period": 5,
-                    "p_type": "within",
+                    "period": 0,
+                    "p_type": "ago",
                     "disparity": 5.0
                 }
             ]
