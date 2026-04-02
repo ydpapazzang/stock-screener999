@@ -151,6 +151,28 @@
                     "disparity": 5.0
                 }
             ]
+        },
+        {
+            "name": "십이평선",
+            "timeframe": "월봉",
+            "conditions": [
+                {
+                    "a": "종가",
+                    "b": "MA10",
+                    "op": "<",
+                    "period": 1,
+                    "p_type": "ago",
+                    "disparity": null
+                },
+                {
+                    "a": "종가",
+                    "b": "MA10",
+                    "op": ">",
+                    "period": 0,
+                    "p_type": "ago",
+                    "disparity": null
+                }
+            ]
         }
     ],
     "watchlist": [
