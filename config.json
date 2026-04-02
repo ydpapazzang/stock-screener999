@@ -195,6 +195,20 @@
                     "disparity": null
                 }
             ]
+        },
+        {
+            "name": "5to20",
+            "timeframe": "주봉",
+            "conditions": [
+                {
+                    "a": "MA5",
+                    "b": "MA20",
+                    "op": ">",
+                    "period": 0,
+                    "p_type": "ago",
+                    "disparity": 3.0
+                }
+            ]
         }
     ],
     "watchlist": [
