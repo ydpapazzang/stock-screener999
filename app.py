@@ -7,6 +7,7 @@ import re
 import time
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 
 # --- [0] 보안 설정 ---
 GH_TOKEN = logic.get_secret("GH_TOKEN", "")
@@ -65,7 +66,15 @@ if st.session_state["scanning"]:
                 for f in as_completed(futures):
                     res = f.result()
                     if res: results.append(res)
-        st.session_state['last_results'] = pd.DataFrame(results).sort_values(by=["코드"]) if results else pd.DataFrame()
+        if results:
+            df_results = pd.DataFrame(results)
+            status_priority = {"🚀 최초진입": 0, "📈 추세유지": 1}
+            df_results['_status_sort'] = df_results['상태'].map(status_priority).fillna(99)
+            df_results = df_results.sort_values(by=['_status_sort', '코드'])
+            df_results = df_results.drop(columns=['_status_sort'])
+        else:
+            df_results = pd.DataFrame()
+        st.session_state['last_results'] = df_results
         st.session_state['last_query_strats'] = ", ".join(sel_strats)
         st.session_state["active_tab_idx"] = 0
     st.session_state["scanning"] = False; st.rerun()
@@ -90,10 +99,28 @@ if curr_tab == "🚀 전략 스캔":
         df = st.session_state['last_results']
         if not df.empty:
             st.success(f"✅ 스캔 완료 | 전략: `{st.session_state.get('last_query_strats')}` | 총 {len(df)}건")
-            df_d = df.copy(); df_d.index = range(1, len(df)+1)
-            st.dataframe(df_d, use_container_width=True)
+            detail_key = "detail_selected_stock"
+            if detail_key not in st.session_state or st.session_state[detail_key] not in df['종목명'].tolist():
+                st.session_state[detail_key] = df['종목명'].iloc[0]
+            df_d = df.copy()
+            gb = GridOptionsBuilder.from_dataframe(df_d)
+            gb.configure_selection('single', use_checkbox=False)
+            grid_options = gb.build()
+            grid_options['rowSelection'] = 'single'
+            grid_options['suppressRowClickSelection'] = False
+            grid_resp = AgGrid(
+                df_d,
+                gridOptions=grid_options,
+                height=420,
+                update_mode=GridUpdateMode.SELECTION_CHANGED,
+                fit_columns_on_grid_load=True,
+                theme="streamlit",
+            )
+            selected_rows = grid_resp.get("selected_rows", [])
+            if selected_rows:
+                st.session_state[detail_key] = selected_rows[0]['종목명']
             c1, c2 = st.columns([2, 1])
-            sel_s = c1.selectbox("상세 분석", df['종목명'].tolist())
+            sel_s = c1.selectbox("상세 분석", df['종목명'].tolist(), key=detail_key)
             if sel_s:
                 row = df[df['종목명']==sel_s].iloc[0]
                 links = logic.get_external_link(row['코드'])

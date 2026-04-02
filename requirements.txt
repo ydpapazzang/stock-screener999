@@ -11,3 +11,4 @@ yfinance
 plotly
 matplotlib
 pytz
+streamlit-aggrid
