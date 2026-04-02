@@ -14,14 +14,8 @@ import plotly.express as px
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import yfinance as yf
 import matplotlib.pyplot as plt
-import pytz
 
 CONFIG_FILE = "config.json"
-
-def get_now_by_timezone():
-    config = load_config()
-    tz_str = config.get("timezone", "Asia/Seoul")
-    return datetime.now(pytz.timezone(tz_str))
 
 def load_config():
     if os.path.exists(CONFIG_FILE):
@@ -92,7 +86,10 @@ def get_processed_data(symbol, period='D'):
         loss = (-delta.where(delta < 0, 0)).rolling(14, min_periods=1).mean()
         df['rsi'] = 100 - (100 / (1 + (gain / (loss + 1e-9))))
         return df
-    except: return None
+    except Exception as e:
+        # API 오류나 데이터 처리 중 예외 발생 시 로그를 남겨 디버깅을 용이하게 함
+        # print(f"Error processing {symbol}: {e}") # 디버깅 시 활성화
+        return None
 
 def get_indicator_val(df, key):
     k = str(key).upper()
