@@ -123,7 +123,7 @@ if curr_tab == "🚀 전략 스캔":
                 selected_rows = grid_event.selection.rows if grid_event and grid_event.selection else []
                 if selected_rows:
                     selected_idx = selected_rows[0]
-                    st.session_state[detail_key] = df_d.iloc[selected_idx]['종목명']
+                    st.session_state[detail_key] = df_d.iloc[selected_idx]["종목명"]
             except TypeError:
                 # Fallback for older Streamlit versions without row-selection support
                 st.dataframe(df_d, use_container_width=True, hide_index=True)
