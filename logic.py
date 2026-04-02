@@ -14,8 +14,14 @@ import plotly.express as px
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import yfinance as yf
 import matplotlib.pyplot as plt
+import pytz
 
 CONFIG_FILE = "config.json"
+
+def get_now_by_timezone():
+    config = load_config()
+    tz_str = config.get("timezone", "Asia/Seoul")
+    return datetime.now(pytz.timezone(tz_str))
 
 def load_config():
     if os.path.exists(CONFIG_FILE):

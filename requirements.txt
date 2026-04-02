@@ -10,3 +10,4 @@ lxml_html_clean
 yfinance
 plotly
 matplotlib
+pytz
