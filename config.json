@@ -8,13 +8,6 @@
             "time": "06:00",
             "strategy": "월봉 12선 돌파",
             "target": "한국 ETF"
-        },
-        {
-            "id": "b0e6d199",
-            "freq": "매월 (1일)",
-            "time": "06:00",
-            "strategy": " 주봉/월봉 10이평선 돌파 및 지지 패턴",
-            "target": "한국 ETF"
         }
     ],
     "password": "6666",
