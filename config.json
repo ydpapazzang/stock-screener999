@@ -20,6 +20,20 @@
     "password": "6666",
     "history": [
         {
+            "time": "2026-04-10 06:50",
+            "strategy": "월봉 12선 돌파",
+            "target": "한국 ETF",
+            "count": 15,
+            "status": "Success"
+        },
+        {
+            "time": "2026-04-10 06:50",
+            "strategy": " 주봉/월봉 10이평선 돌파 및 지지 패턴",
+            "target": "한국 ETF",
+            "count": 22,
+            "status": "Success"
+        },
+        {
             "time": "2026-04-09 06:53",
             "strategy": "월봉 12선 돌파",
             "target": "한국 ETF",
@@ -143,13 +157,6 @@
             "strategy": "거래량 폭발 (세력개입) (수동)",
             "target": "주식 (KOSPI 200)",
             "count": 2,
-            "status": "Success"
-        },
-        {
-            "time": "2026-03-31 12:51",
-            "strategy": "정석 정배열 (추세추종) (수동)",
-            "target": "주식 (KOSPI 200)",
-            "count": 39,
             "status": "Success"
         }
     ],
