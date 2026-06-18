@@ -20,6 +20,20 @@
     "password": "6666",
     "history": [
         {
+            "time": "2026-06-19 06:29",
+            "strategy": "월봉 12선 돌파",
+            "target": "한국 ETF",
+            "count": 16,
+            "status": "Success"
+        },
+        {
+            "time": "2026-06-19 06:29",
+            "strategy": " 주봉/월봉 10이평선 돌파 및 지지 패턴",
+            "target": "한국 ETF",
+            "count": 0,
+            "status": "Success"
+        },
+        {
             "time": "2026-06-18 06:24",
             "strategy": "월봉 12선 돌파",
             "target": "한국 ETF",
@@ -143,20 +157,6 @@
             "strategy": " 주봉/월봉 10이평선 돌파 및 지지 패턴",
             "target": "한국 ETF",
             "count": 0,
-            "status": "Success"
-        },
-        {
-            "time": "2026-06-01 06:17",
-            "strategy": "월봉 12선 돌파",
-            "target": "한국 ETF",
-            "count": 11,
-            "status": "Success"
-        },
-        {
-            "time": "2026-06-01 06:17",
-            "strategy": " 주봉/월봉 10이평선 돌파 및 지지 패턴",
-            "target": "한국 ETF",
-            "count": 1,
             "status": "Success"
         }
     ],
